@@ -831,7 +831,12 @@ export class DashboardComponent implements OnInit, OnDestroy {
     });
 
     this.api.getMarketIndicators().subscribe({
-      next: (data) => { this.oilWTI = data.oil_wti; this.fedRate = data.fed_rate; this.banrepRate = data.banrep_rate; this.inflationCol = data.inflation_col; },
+      next: (data) => {
+        this.oilWTI = Number(data.oil_wti) || 0;
+        this.fedRate = Number(data.fed_rate) || 0;
+        this.banrepRate = Number(data.banrep_rate) || 0;
+        this.inflationCol = Number(data.inflation_col) || 0;
+      },
       error: () => { this.oilWTI = 75.5; this.fedRate = 5.25; this.banrepRate = 9.5; this.inflationCol = 5.2; }
     });
 

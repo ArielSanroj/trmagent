@@ -62,7 +62,7 @@ async def get_current_signal(
     Obtener senal de trading actual
     Genera una nueva evaluacion en tiempo real
     """
-    decision = decision_engine.generate_signal(company_id=current_user.company_id)
+    decision = await decision_engine.generate_signal(company_id=current_user.company_id)
 
     signal_response = TradingSignalResponse(
         id=UUID('00000000-0000-0000-0000-000000000000'),  # Temporal
@@ -95,7 +95,7 @@ async def evaluate_and_notify(
     """
     Evaluar mercado y enviar alertas si hay oportunidad
     """
-    decision = decision_engine.generate_signal(company_id=current_user.company_id)
+    decision = await decision_engine.generate_signal(company_id=current_user.company_id)
 
     # Guardar senal si es relevante
     signal_id = None
@@ -187,7 +187,7 @@ async def evaluate_with_specific_model(
         uow_factory=container.get_uow_factory()
     )
 
-    decision = engine.generate_signal(company_id=current_user.company_id)
+    decision = await engine.generate_signal(company_id=current_user.company_id)
 
     return {
         "model_type": model_type,
@@ -223,7 +223,7 @@ async def create_order(
 
     if order.is_paper_trade:
         # Ejecutar en paper trading
-        decision = decision_engine.generate_signal(company_id=current_user.company_id)
+        decision = await decision_engine.generate_signal(company_id=current_user.company_id)
 
         result = paper_trading_service.execute_paper_trade(
             decision=decision,

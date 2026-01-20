@@ -34,7 +34,7 @@ export interface WebhookRequest {
     providedIn: 'root'
 })
 export class RiskService {
-    private apiUrl = `${environment.apiUrl}/api/v1/risk`;
+    private apiUrl = `${environment.apiUrl}/risk`;
 
     constructor(private http: HttpClient) { }
 

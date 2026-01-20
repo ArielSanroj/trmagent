@@ -95,7 +95,7 @@ class DecisionEngine:
         else:
             self._uow_factory = uow_factory
 
-    def generate_signal(
+    async def generate_signal(
         self,
         company_id: Optional[UUID] = None,
         prediction: Optional[dict] = None
@@ -114,7 +114,7 @@ class DecisionEngine:
         config = self._get_company_config(company_id)
 
         # Obtener TRM actual
-        current_trm = self._get_current_trm()
+        current_trm = await self._get_current_trm()
         if not current_trm:
             return self._create_hold_decision(
                 current_trm=Decimal("0"),
@@ -123,7 +123,7 @@ class DecisionEngine:
 
         # Obtener o generar prediccion
         if prediction is None:
-            prediction = self._generate_prediction()
+            prediction = await self._generate_prediction()
 
         if not prediction:
             return self._create_hold_decision(
@@ -211,38 +211,22 @@ class DecisionEngine:
                     "max_risk": self.default_max_risk
                 }
 
-    def _get_current_trm(self) -> Optional[Decimal]:
+    async def _get_current_trm(self) -> Optional[Decimal]:
         """Obtener TRM actual"""
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        trm_data = loop.run_until_complete(data_ingestion_service.get_current_trm())
+        trm_data = await data_ingestion_service.get_current_trm()
         if trm_data:
             return Decimal(str(trm_data["value"]))
         return None
 
-    def _generate_prediction(self) -> Optional[dict]:
+    async def _generate_prediction(self) -> Optional[dict]:
         """
         Generar prediccion usando modelo ML inyectado
 
         Refactorizado: Usa self._ml_model en lugar de import directo
         Resuelve violacion SRP
         """
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
         # Obtener historico
-        trm_history = loop.run_until_complete(
-            data_ingestion_service.get_trm_history(days=90)
-        )
+        trm_history = await data_ingestion_service.get_trm_history(days=90)
 
         if not trm_history or not self._ml_model.is_fitted:
             return None

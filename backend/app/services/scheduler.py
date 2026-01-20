@@ -140,7 +140,7 @@ def evaluate_trading_signals():
 
     try:
         # Generar senal
-        decision = decision_engine.generate_signal()
+        decision = asyncio.run(decision_engine.generate_signal())
 
         logger.info(
             f"Signal generated: {decision.action.value}, "
