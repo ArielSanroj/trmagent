@@ -1,0 +1,52 @@
+# FastAPI and server
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9
+asyncpg==0.29.0
+
+# Redis and task queue
+redis==5.0.1
+celery==5.3.6
+celery[redis]==5.3.6
+
+# ML Libraries
+numpy==1.26.3
+pandas==2.1.4
+scikit-learn==1.4.0
+prophet==1.1.5
+tensorflow==2.15.0
+xgboost==2.0.3
+statsmodels==0.14.1
+
+# HTTP client
+httpx==0.25.2
+aiohttp==3.9.1
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+pydantic[email]==2.5.3
+pydantic-settings==2.1.0
+
+# Notifications
+python-telegram-bot==20.7
+slack-sdk==3.26.2
+
+# Broker integrations
+ib_insync==0.9.86
+alpaca-py==0.13.1
+
+# Utils
+python-dotenv==1.0.0
+pytz==2023.3.post1
+APScheduler==3.10.4
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+httpx==0.25.2

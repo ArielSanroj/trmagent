@@ -1,0 +1,640 @@
+/**
+ * Predictions Component - Vista de predicciones ML
+ */
+import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { RouterModule } from '@angular/router';
+import { ApiService, Prediction } from '../services/api.service';
+import { NotificationService } from '../services/notification.service';
+
+@Component({
+  selector: 'app-predictions',
+  standalone: true,
+  imports: [CommonModule, FormsModule, RouterModule],
+  template: `
+    <div class="predictions-page">
+      <header class="page-header">
+        <div class="header-content">
+          <a routerLink="/dashboard" class="back-link">← Dashboard</a>
+          <h1>Predicciones ML</h1>
+          <p>Analisis predictivo USD/COP con modelos Prophet, LSTM y Ensemble</p>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <!-- Controls -->
+        <div class="controls-card">
+          <div class="control-group">
+            <label>Modelo</label>
+            <select [(ngModel)]="selectedModel">
+              <option value="ensemble">Ensemble (Recomendado)</option>
+              <option value="prophet">Prophet</option>
+              <option value="lstm">LSTM</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Dias a predecir</label>
+            <select [(ngModel)]="daysAhead">
+              <option [value]="7">7 dias</option>
+              <option [value]="14">14 dias</option>
+              <option [value]="30">30 dias</option>
+              <option [value]="60">60 dias</option>
+              <option [value]="90">90 dias</option>
+            </select>
+          </div>
+          <button class="generate-btn" (click)="generatePredictions()" [disabled]="loading">
+            {{ loading ? 'Generando...' : 'Generar Predicciones' }}
+          </button>
+        </div>
+
+        <div *ngIf="isMockData" class="mock-warning">
+          Servidor no conectado, mostrando mock up data.
+        </div>
+
+        <!-- Summary -->
+        <div *ngIf="summary" class="summary-cards">
+          <div class="summary-card">
+            <span class="summary-label">TRM Actual</span>
+            <span class="summary-value">$ {{ summary.current_trm | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Prediccion Promedio</span>
+            <span class="summary-value">$ {{ summary.average_prediction | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Rango</span>
+            <span class="summary-value">
+              $ {{ summary.min_prediction | number:'1.0-0' }} - $ {{ summary.max_prediction | number:'1.0-0' }}
+            </span>
+          </div>
+          <div class="summary-card trend" [class]="summary.overall_trend.toLowerCase()">
+            <span class="summary-label">Tendencia</span>
+            <span class="summary-value">
+              {{ summary.overall_trend === 'ALCISTA' ? '📈' : summary.overall_trend === 'BAJISTA' ? '📉' : '➡️' }}
+              {{ summary.overall_trend }}
+            </span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Confianza Promedio</span>
+            <span class="summary-value">{{ summary.average_confidence | number:'1.1-1' }}%</span>
+          </div>
+        </div>
+
+        <!-- Predictions Chart -->
+        <div class="predictions-chart-card">
+          <h3>Pronostico Visual</h3>
+          <div class="chart-area">
+            <div class="chart-grid">
+              <!-- Y axis labels -->
+              <div class="y-axis">
+                <span>$ {{ maxValue | number:'1.0-0' }}</span>
+                <span>$ {{ midValue | number:'1.0-0' }}</span>
+                <span>$ {{ minValue | number:'1.0-0' }}</span>
+              </div>
+              <!-- Chart bars -->
+              <div class="chart-bars">
+                <div *ngFor="let pred of predictions; let i = index"
+                     class="prediction-bar-container"
+                     [title]="pred.target_date + ': $' + pred.predicted_value">
+                  <div class="confidence-range"
+                       [style.bottom.%]="getPosition(pred.lower_bound)"
+                       [style.height.%]="getPosition(pred.upper_bound) - getPosition(pred.lower_bound)">
+                  </div>
+                  <div class="prediction-bar"
+                       [style.bottom.%]="getPosition(pred.predicted_value)"
+                       [class.alcista]="pred.trend === 'ALCISTA'"
+                       [class.bajista]="pred.trend === 'BAJISTA'">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="dot alcista"></span> Alcista</span>
+              <span class="legend-item"><span class="dot bajista"></span> Bajista</span>
+              <span class="legend-item"><span class="range-box"></span> Intervalo 90%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Predictions Table -->
+        <div class="predictions-table-card">
+          <h3>Detalle de Predicciones</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Prediccion</th>
+                  <th>Rango (90% IC)</th>
+                  <th>Confianza</th>
+                  <th>Tendencia</th>
+                  <th>Modelo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let pred of predictions">
+                  <td>{{ pred.target_date | date:'mediumDate' }}</td>
+                  <td class="value">$ {{ pred.predicted_value | number:'1.2-2' }}</td>
+                  <td class="range">
+                    $ {{ pred.lower_bound | number:'1.0-0' }} - $ {{ pred.upper_bound | number:'1.0-0' }}
+                  </td>
+                  <td>
+                    <div class="confidence-bar">
+                      <div class="fill" [style.width.%]="pred.confidence * 100"></div>
+                      <span>{{ pred.confidence * 100 | number:'1.0-0' }}%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="trend-badge" [class]="pred.trend.toLowerCase()">
+                      {{ pred.trend === 'ALCISTA' ? '📈' : pred.trend === 'BAJISTA' ? '📉' : '➡️' }}
+                      {{ pred.trend }}
+                    </span>
+                  </td>
+                  <td>{{ pred.model_type }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Model Info -->
+        <div class="model-info-card">
+          <h3>Sobre los Modelos</h3>
+          <div class="models-grid">
+            <div class="model-item">
+              <h4>Prophet</h4>
+              <p>Modelo de Meta para series temporales. Excelente para capturar estacionalidad y tendencias. Rapido y robusto.</p>
+              <span class="model-badge">Recomendado para predicciones a corto plazo</span>
+            </div>
+            <div class="model-item">
+              <h4>LSTM</h4>
+              <p>Red neuronal recurrente (Deep Learning). Captura patrones temporales complejos. Requiere mas datos historicos.</p>
+              <span class="model-badge">Mejor para patrones no lineales</span>
+            </div>
+            <div class="model-item">
+              <h4>Ensemble</h4>
+              <p>Combinacion ponderada de Prophet y LSTM. Mayor robustez y precision al promediar multiples modelos.</p>
+              <span class="model-badge highlight">Recomendado para produccion</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  `,
+  styles: [`
+    .predictions-page {
+      min-height: 100vh;
+      background: #f5f7fa;
+    }
+
+    .page-header {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      color: white;
+      padding: 30px;
+    }
+
+    .back-link {
+      color: rgba(255,255,255,0.8);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+
+    .page-header h1 {
+      margin: 10px 0 5px 0;
+      font-size: 2rem;
+    }
+
+    .page-header p {
+      margin: 0;
+      opacity: 0.8;
+    }
+
+    .page-content {
+      padding: 30px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .controls-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      display: flex;
+      gap: 20px;
+      align-items: flex-end;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    .mock-warning {
+      background: #fff3cd;
+      border: 1px solid #ffeeba;
+      color: #856404;
+      padding: 12px 16px;
+      border-radius: 10px;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+
+    .control-group {
+      flex: 1;
+    }
+
+    .control-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 500;
+      color: #333;
+    }
+
+    .control-group select {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e0e0e0;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+
+    .generate-btn {
+      padding: 12px 30px;
+      background: linear-gradient(135deg, #0066cc, #0044aa);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .generate-btn:disabled {
+      opacity: 0.7;
+    }
+
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 15px;
+      margin-bottom: 30px;
+    }
+
+    .summary-card {
+      background: white;
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    .summary-card.trend.alcista {
+      border-bottom: 4px solid #00c853;
+    }
+
+    .summary-card.trend.bajista {
+      border-bottom: 4px solid #ff5252;
+    }
+
+    .summary-label {
+      display: block;
+      font-size: 0.85rem;
+      color: #666;
+      margin-bottom: 8px;
+    }
+
+    .summary-value {
+      font-size: 1.3rem;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+
+    .predictions-chart-card,
+    .predictions-table-card,
+    .model-info-card {
+      background: white;
+      border-radius: 12px;
+      padding: 25px;
+      margin-bottom: 30px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+    }
+
+    h3 {
+      margin: 0 0 20px 0;
+      color: #1a1a2e;
+    }
+
+    .chart-area {
+      height: 300px;
+    }
+
+    .chart-grid {
+      display: flex;
+      height: 250px;
+    }
+
+    .y-axis {
+      width: 80px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 10px 10px 10px 0;
+      font-size: 0.8rem;
+      color: #666;
+      text-align: right;
+    }
+
+    .chart-bars {
+      flex: 1;
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      border-left: 1px solid #ddd;
+      border-bottom: 1px solid #ddd;
+      padding: 10px;
+      position: relative;
+    }
+
+    .prediction-bar-container {
+      flex: 1;
+      height: 100%;
+      position: relative;
+    }
+
+    .confidence-range {
+      position: absolute;
+      left: 20%;
+      width: 60%;
+      background: rgba(0, 102, 204, 0.1);
+      border-radius: 4px;
+    }
+
+    .prediction-bar {
+      position: absolute;
+      left: 10%;
+      width: 80%;
+      height: 8px;
+      background: #0066cc;
+      border-radius: 4px;
+    }
+
+    .prediction-bar.alcista {
+      background: #00c853;
+    }
+
+    .prediction-bar.bajista {
+      background: #ff5252;
+    }
+
+    .chart-legend {
+      display: flex;
+      justify-content: center;
+      gap: 30px;
+      margin-top: 15px;
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .dot.alcista {
+      background: #00c853;
+    }
+
+    .dot.bajista {
+      background: #ff5252;
+    }
+
+    .range-box {
+      width: 20px;
+      height: 12px;
+      background: rgba(0, 102, 204, 0.2);
+      border-radius: 2px;
+    }
+
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #eee;
+    }
+
+    th {
+      background: #f8f9fa;
+      font-weight: 600;
+      color: #333;
+    }
+
+    td.value {
+      font-weight: 600;
+      color: #1a1a2e;
+    }
+
+    td.range {
+      font-size: 0.9rem;
+      color: #666;
+    }
+
+    .confidence-bar {
+      position: relative;
+      background: #e0e0e0;
+      border-radius: 10px;
+      height: 20px;
+      overflow: hidden;
+    }
+
+    .confidence-bar .fill {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      background: linear-gradient(90deg, #0066cc, #00aaff);
+      border-radius: 10px;
+    }
+
+    .confidence-bar span {
+      position: relative;
+      z-index: 1;
+      display: block;
+      text-align: center;
+      font-size: 0.75rem;
+      font-weight: 600;
+      line-height: 20px;
+    }
+
+    .trend-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .trend-badge.alcista {
+      background: #e6f4ea;
+      color: #137333;
+    }
+
+    .trend-badge.bajista {
+      background: #fce8e6;
+      color: #c5221f;
+    }
+
+    .trend-badge.neutral {
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .models-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    .model-item {
+      padding: 20px;
+      background: #f8f9fa;
+      border-radius: 10px;
+    }
+
+    .model-item h4 {
+      margin: 0 0 10px 0;
+      color: #1a1a2e;
+    }
+
+    .model-item p {
+      margin: 0 0 15px 0;
+      color: #666;
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .model-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      background: #e3f2fd;
+      color: #0066cc;
+      border-radius: 12px;
+      font-size: 0.8rem;
+    }
+
+    .model-badge.highlight {
+      background: #0066cc;
+      color: white;
+    }
+  `]
+})
+export class PredictionsComponent implements OnInit {
+  predictions: Prediction[] = [];
+  summary: any = null;
+  loading = false;
+  isMockData = false;
+
+  selectedModel = 'ensemble';
+  daysAhead = 30;
+
+  minValue = 4000;
+  maxValue = 4400;
+  midValue = 4200;
+
+  constructor(
+    private api: ApiService,
+    private notifications: NotificationService
+  ) {}
+
+  ngOnInit(): void {
+    this.loadForecast();
+  }
+
+  loadForecast(): void {
+    this.api.getForecast(this.daysAhead).subscribe({
+      next: (data) => {
+        this.predictions = data.predictions;
+        this.summary = data.summary;
+        this.calculateRange();
+        this.isMockData = false;
+      },
+      error: () => {
+        this.generateMockData();
+        this.isMockData = true;
+      }
+    });
+  }
+
+  generatePredictions(): void {
+    this.loading = true;
+    this.notifications.info('Generando', 'Entrenando modelos y generando predicciones...');
+
+    this.api.generatePredictions(this.daysAhead, this.selectedModel).subscribe({
+      next: (result) => {
+        this.notifications.success('Completado', `${result.generated} predicciones generadas`);
+        this.loadForecast();
+        this.loading = false;
+      },
+      error: (err) => {
+        this.notifications.error('Error', err.message);
+        this.isMockData = true;
+        this.loading = false;
+      }
+    });
+  }
+
+  calculateRange(): void {
+    if (this.predictions.length === 0) return;
+
+    const values = this.predictions.flatMap(p => [p.lower_bound, p.upper_bound, p.predicted_value]);
+    this.minValue = Math.min(...values) * 0.98;
+    this.maxValue = Math.max(...values) * 1.02;
+    this.midValue = (this.minValue + this.maxValue) / 2;
+  }
+
+  getPosition(value: number): number {
+    return ((value - this.minValue) / (this.maxValue - this.minValue)) * 100;
+  }
+
+  generateMockData(): void {
+    const baseValue = 4150;
+    this.predictions = Array.from({ length: this.daysAhead }, (_, i) => {
+      const trend = Math.random() > 0.5 ? 1 : -1;
+      const predicted = baseValue + trend * (i * 2 + Math.random() * 30);
+      return {
+        id: `mock-${i}`,
+        target_date: new Date(Date.now() + (i + 1) * 86400000).toISOString().split('T')[0],
+        predicted_value: predicted,
+        lower_bound: predicted - 50,
+        upper_bound: predicted + 50,
+        confidence: 0.85 + Math.random() * 0.1,
+        model_type: this.selectedModel,
+        trend: predicted > baseValue ? 'ALCISTA' : 'BAJISTA' as any
+      };
+    });
+
+    this.summary = {
+      current_trm: baseValue,
+      average_prediction: this.predictions.reduce((a, p) => a + p.predicted_value, 0) / this.predictions.length,
+      min_prediction: Math.min(...this.predictions.map(p => p.predicted_value)),
+      max_prediction: Math.max(...this.predictions.map(p => p.predicted_value)),
+      average_confidence: 90,
+      overall_trend: this.predictions[this.predictions.length - 1].predicted_value > baseValue ? 'ALCISTA' : 'BAJISTA'
+    };
+
+    this.calculateRange();
+  }
+}
