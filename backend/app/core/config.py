@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     BANREP_API_URL: str = "https://www.banrep.gov.co/estadisticas-economicas"
     FRED_API_KEY: Optional[str] = None
     ALPHA_VANTAGE_KEY: Optional[str] = None
+    SETICAP_BASE_URL: str = "https://proxy.set-icap.com/seticap/api/graficos/"
+    SETICAP_MONEDA_USD_COP: int = 1
+    SETICAP_MARKET_ID: int = 71
+    SETICAP_DELAY: str = "15"
 
     # Trading Configuration - CONFIANZA 90%
     MIN_CONFIDENCE: float = 0.90  # 90% de confianza minima

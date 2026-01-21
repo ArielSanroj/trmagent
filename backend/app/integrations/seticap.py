@@ -9,15 +9,13 @@ import re
 
 import httpx
 
+from app.core.config import settings
+
 logger = logging.getLogger(__name__)
 
 
 class SetIcapClient:
     """Cliente para datos USD/COP desde set-icap.com"""
-
-    BASE_URL = "https://proxy.set-icap.com/seticap/api/graficos/"
-    MONEDA_USD_COP = 1
-    MARKET_SET_FX = 71
 
     _PRICE_RE = re.compile(r"label:\s*'Precios de cierre'\s*,\s*data:\s*\[([^\]]+)\]")
 
@@ -31,17 +29,19 @@ class SetIcapClient:
         self,
         target_date: date,
         realtime: bool = True,
-        delay: str = "15"
+        delay: Optional[str] = None
     ) -> Optional[str]:
         endpoint = "graficoMonedaRT/" if realtime else "graficoMoneda/"
+        if delay is None:
+            delay = settings.SETICAP_DELAY
         payload = {
             "fecha": target_date.isoformat(),
-            "moneda": self.MONEDA_USD_COP,
+            "moneda": settings.SETICAP_MONEDA_USD_COP,
             "delay": str(delay),
-            "market": self.MARKET_SET_FX,
+            "market": settings.SETICAP_MARKET_ID,
         }
 
-        response = await self.client.post(f"{self.BASE_URL}{endpoint}", json=payload)
+        response = await self.client.post(f"{settings.SETICAP_BASE_URL}{endpoint}", json=payload)
         response.raise_for_status()
 
         data = response.json()
@@ -79,7 +79,7 @@ class SetIcapClient:
         self,
         target_date: date,
         realtime: bool = True,
-        delay: str = "15"
+        delay: Optional[str] = None
     ) -> Optional[dict]:
         try:
             chart = await self._fetch_chart(target_date, realtime=realtime, delay=delay)
