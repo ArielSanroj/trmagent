@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_
 
 from app.integrations.datos_gov import datos_gov_client
+from app.integrations.seticap import seticap_client
 from app.integrations.banrep import banrep_client
 from app.integrations.fred_api import fred_client
 from app.integrations.oil_prices import oil_client
@@ -34,8 +35,10 @@ class DataIngestionService:
         logger.info(f"Fetching TRM data for last {days} days")
 
         try:
-            # Obtener datos de datos.gov.co
-            trm_data = await datos_gov_client.get_trm_history(days=days)
+            # Obtener datos desde Set-ICAP (fallback a datos.gov.co)
+            trm_data = await seticap_client.get_trm_history(days=days)
+            if not trm_data:
+                trm_data = await datos_gov_client.get_trm_history(days=days)
 
             if not trm_data:
                 logger.warning("No TRM data received from API")
@@ -173,7 +176,9 @@ class DataIngestionService:
                 }
 
             # Si no hay datos recientes, obtener de API
-            trm = await datos_gov_client.get_current_trm()
+            trm = await seticap_client.get_current_trm()
+            if not trm:
+                trm = await datos_gov_client.get_current_trm()
             return trm
 
         finally:
@@ -209,7 +214,8 @@ class DataIngestionService:
             finally:
                 db.close()
         else:
-            return await datos_gov_client.get_trm_history(days=days)
+            history = await seticap_client.get_trm_history(days=days)
+            return history or await datos_gov_client.get_trm_history(days=days)
 
     async def get_latest_indicators(self) -> Dict[str, Optional[dict]]:
         """Obtener ultimos valores de todos los indicadores"""

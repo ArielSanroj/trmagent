@@ -85,7 +85,12 @@ class DecisionEngine:
         # Inyeccion de dependencias
         if ml_model is None:
             container = get_container()
-            self._ml_model = container.ml_registry.get_model("ensemble")
+            # Intentar usar ensemble primero, si no está disponible usar prophet
+            try:
+                self._ml_model = container.ml_registry.get_model("ensemble")
+            except ValueError:
+                # Fallback a prophet si ensemble no está disponible
+                self._ml_model = container.ml_registry.get_model("prophet")
         else:
             self._ml_model = ml_model
 

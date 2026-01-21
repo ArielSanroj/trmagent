@@ -1,6 +1,6 @@
 """
 Adapter para ProphetModel que implementa IMLModel
-Resuelve violacion LSP: adapta la firma de Prophet a la interface uniforme
+Provides a uniform interface for Prophet model usage
 """
 from typing import List, Optional
 from datetime import datetime
@@ -22,8 +22,7 @@ class ProphetModelAdapter:
     """
     Adapter para que Prophet cumpla IMLModel
 
-    Prophet originalmente tiene predict(days_ahead, indicators)
-    pero IMLModel requiere predict(trm_history, days_ahead, indicators)
+    Delegates to ProphetModel with the uniform predict(trm_history, days_ahead, indicators) interface
     """
 
     def __init__(self):
@@ -68,9 +67,7 @@ class ProphetModelAdapter:
         los datos del entrenamiento, pero lo aceptamos para uniformidad
         con LSTM y cumplir IMLModel
         """
-        # Prophet internamente usa make_future_dataframe()
-        # No necesita trm_history, pero lo recibimos para cumplir interface
-        return self._model.predict(days_ahead, indicators)
+        return self._model.predict(trm_history, days_ahead, indicators)
 
     def save_model(self, path: str) -> bool:
         """Guardar modelo entrenado"""

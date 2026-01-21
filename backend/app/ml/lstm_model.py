@@ -49,8 +49,11 @@ class LSTMModel:
         self.model_version = "lstm_v1"
         self.last_trained = None
 
-    def _build_model(self) -> Sequential:
+    def _build_model(self):
         """Construir arquitectura del modelo LSTM"""
+        if not TF_AVAILABLE:
+            raise ImportError("TensorFlow is required for LSTM model. Install with: pip install tensorflow")
+        
         model = Sequential([
             # Primera capa LSTM
             LSTM(

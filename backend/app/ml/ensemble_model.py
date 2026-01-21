@@ -9,9 +9,19 @@ from decimal import Decimal
 import logging
 
 from app.ml.prophet_model import ProphetModel
-from app.ml.lstm_model import LSTMModel
 
-logger = logging.getLogger(__name__)
+# Import LSTM condicionalmente
+try:
+    from app.ml.lstm_model import LSTMModel
+    LSTM_AVAILABLE = True
+except (ImportError, NameError):
+    LSTM_AVAILABLE = False
+    LSTMModel = None
+    logger = logging.getLogger(__name__)
+    logger.warning("LSTM model not available. Install TensorFlow to use ensemble model.")
+
+if 'logger' not in locals():
+    logger = logging.getLogger(__name__)
 
 
 class EnsembleModel:
@@ -22,13 +32,18 @@ class EnsembleModel:
 
     def __init__(self):
         self.prophet = ProphetModel()
-        self.lstm = LSTMModel()
+        self.lstm = LSTMModel() if LSTM_AVAILABLE else None
 
         # Pesos por defecto (ajustar basado en backtesting)
-        self.weights = {
-            "prophet": 0.5,
-            "lstm": 0.5
-        }
+        if LSTM_AVAILABLE:
+            self.weights = {
+                "prophet": 0.5,
+                "lstm": 0.5
+            }
+        else:
+            self.weights = {
+                "prophet": 1.0
+            }
 
         self.model_version = "ensemble_v1"
         self.is_fitted = False
@@ -59,11 +74,14 @@ class EnsembleModel:
             logger.error(f"Error training Prophet: {e}")
             results["prophet"] = False
 
-        # Entrenar LSTM
-        try:
-            results["lstm"] = self.lstm.train(trm_history, indicators, **kwargs)
-        except Exception as e:
-            logger.error(f"Error training LSTM: {e}")
+        # Entrenar LSTM (si está disponible)
+        if self.lstm is not None:
+            try:
+                results["lstm"] = self.lstm.train(trm_history, indicators, **kwargs)
+            except Exception as e:
+                logger.error(f"Error training LSTM: {e}")
+                results["lstm"] = False
+        else:
             results["lstm"] = False
 
         self.is_fitted = any(results.values())
@@ -97,11 +115,11 @@ class EnsembleModel:
 
         # Obtener predicciones de cada modelo
         if self.prophet.is_fitted:
-            prophet_preds = self.prophet.predict(days_ahead, indicators)
+            prophet_preds = self.prophet.predict(trm_history, days_ahead, indicators)
             if prophet_preds:
                 all_predictions["prophet"] = prophet_preds
 
-        if self.lstm.is_fitted:
+        if self.lstm is not None and self.lstm.is_fitted:
             lstm_preds = self.lstm.predict(trm_history, days_ahead, indicators)
             if lstm_preds:
                 all_predictions["lstm"] = lstm_preds

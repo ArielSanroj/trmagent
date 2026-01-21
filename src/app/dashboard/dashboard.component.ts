@@ -806,7 +806,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.chartPeriod = days;
 
     this.api.getCurrentTRM().subscribe({
-      next: (data) => { this.currentTRM = data.value; this.trmChange = data.change_pct || 0; this.isOnline = true; },
+      next: (data) => { this.currentTRM = Number(data.value); this.trmChange = data.change_pct || 0; this.isOnline = true; },
       error: () => { this.currentTRM = 4150 + Math.random() * 50; this.trmChange = (Math.random() - 0.5) * 2; this.isOnline = false; }
     });
 
@@ -921,6 +921,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   }
 
   updateAnalysisData(): void {
+    // Ensure numeric values
+    this.currentTRM = Number(this.currentTRM) || 0;
+    this.predictedTRM = Number(this.predictedTRM) || 0;
+
     // Actualizar predicciones de modelos
     const basePred = this.predictedTRM || this.currentTRM;
     this.models[0].prediction = basePred * (1 + (Math.random() - 0.5) * 0.02);

@@ -1,13 +1,14 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs'; // To use async/await with Observables
+import { environment } from '../environments/environment';
 
 @Injectable({
     providedIn: 'root'
 })
 export class CurrencyService {
-    private apiUrl = 'https://www.datos.gov.co/resource/32sa-8pi3.json?$limit=30&$order=vigenciahasta DESC';
-    // 30 days history for simple prediction
+    private historyUrl = `${environment.apiUrl}/market/trm/history?days=30`;
+    private currentUrl = `${environment.apiUrl}/market/trm/current`;
 
     private cachedData: any[] = [];
 
@@ -16,8 +17,11 @@ export class CurrencyService {
     async loadData(): Promise<void> {
         if (this.cachedData.length > 0) return;
         try {
-            // Fetch data from Datos Abiertos Colombia (TRM)
-            this.cachedData = await firstValueFrom(this.http.get<any[]>(this.apiUrl));
+            const response = await firstValueFrom(this.http.get<{ data: Array<{ date: string; value: number }> }>(this.historyUrl));
+            this.cachedData = (response?.data || []).map(item => ({
+                valor: String(item.value),
+                vigenciahasta: item.date
+            }));
         } catch (e) {
             console.error('Error fetching TRM data', e);
             // Fallback mock if API fails
@@ -29,6 +33,15 @@ export class CurrencyService {
     }
 
     async getDailyTRM(): Promise<number> {
+        try {
+            const current = await firstValueFrom(this.http.get<{ value: number }>(this.currentUrl));
+            if (current?.value !== undefined && current?.value !== null) {
+                return Number(current.value);
+            }
+        } catch (e) {
+            console.error('Error fetching current TRM', e);
+        }
+
         await this.loadData();
         return parseFloat(this.cachedData[0]?.valor || '0');
     }

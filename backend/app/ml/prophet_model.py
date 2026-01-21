@@ -128,6 +128,7 @@ class ProphetModel:
 
     def predict(
         self,
+        trm_history: List[dict],
         days_ahead: int = 30,
         indicators: Optional[dict] = None
     ) -> List[dict]:
@@ -135,6 +136,7 @@ class ProphetModel:
         Generar predicciones
 
         Args:
+            trm_history: Historico reciente de TRM (for interface consistency)
             days_ahead: Dias a predecir
             indicators: Indicadores para el futuro (si hay regresores)
 

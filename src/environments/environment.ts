@@ -2,7 +2,7 @@ export const environment = {
   production: false,
 
   // Backend API
-  apiUrl: 'http://localhost:8000/api/v1',
+  apiUrl: 'http://127.0.0.1:8000/api/v1',
 
   // Google Gemini (for agent chat)
   geminiApiKey: 'TU_API_KEY_AQUI',
