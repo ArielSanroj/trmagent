@@ -10,5 +10,9 @@ export const routes: Routes = [
   { path: 'predictions', component: PredictionsComponent },
   { path: 'backtesting', component: BacktestingComponent },
   { path: 'chat', component: AgentChatComponent },
+  {
+    path: 'atlas',
+    loadChildren: () => import('./atlas/atlas.module').then(m => m.AtlasModule)
+  },
   { path: '**', redirectTo: '/dashboard' }
 ];

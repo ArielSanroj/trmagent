@@ -10,6 +10,10 @@ import logging
 from app.core.config import settings
 from app.core.database import engine, Base
 from app.api.v1 import auth, market, predictions, trading, backtesting, tenants, models, risk
+from app.atlas.api import atlas_router
+
+# Import ATLAS models to ensure they are registered with SQLAlchemy
+from app.atlas.models import atlas_models  # noqa: F401
 
 # Configurar logging
 logging.basicConfig(
@@ -78,6 +82,7 @@ app.include_router(backtesting.router, prefix="/api/v1")
 app.include_router(tenants.router, prefix="/api/v1")
 app.include_router(models.router, prefix="/api/v1")
 app.include_router(risk.router, prefix="/api/v1")
+app.include_router(atlas_router, prefix="/api/v1")
 
 
 # Root endpoint
@@ -119,7 +124,8 @@ async def api_info():
             "trading": "/api/v1/trading",
             "backtesting": "/api/v1/backtesting",
             "tenants": "/api/v1/tenants",
-            "models": "/api/v1/models"
+            "models": "/api/v1/models",
+            "atlas": "/api/v1/atlas"
         },
         "trading_config": {
             "min_confidence": f"{settings.MIN_CONFIDENCE * 100}%",

@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.config import settings
 from app.core.database import Base
 from app.models.database_models import *  # Import all models
+from app.atlas.models.atlas_models import *  # Import ATLAS models
 
 # Alembic Config object
 config = context.config
