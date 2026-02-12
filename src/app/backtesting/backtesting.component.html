@@ -1,0 +1,225 @@
+    <div class="backtesting-page">
+      <header class="page-header">
+        <div class="header-content">
+          <a routerLink="/dashboard" class="back-link">← Dashboard</a>
+          <h1>Backtesting</h1>
+          <p>Valida estrategias de trading con datos historicos (hasta 5 anos)</p>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <!-- Config Card -->
+        <div class="config-card">
+          <h3>Configurar Backtest</h3>
+          <div class="config-grid">
+            <div class="config-item">
+              <label>Estrategia</label>
+              <select [(ngModel)]="config.strategy">
+                <option value="ml_signal">ML Signal (Recomendada)</option>
+                <option value="momentum">Momentum</option>
+                <option value="mean_reversion">Mean Reversion</option>
+              </select>
+            </div>
+            <div class="config-item">
+              <label>Modelo ML</label>
+              <select [(ngModel)]="config.model_type">
+                <option value="ensemble">Ensemble</option>
+                <option value="prophet">Prophet</option>
+                <option value="lstm">LSTM</option>
+              </select>
+            </div>
+            <div class="config-item">
+              <label>Fecha Inicio</label>
+              <input type="date" [(ngModel)]="config.start_date" />
+            </div>
+            <div class="config-item">
+              <label>Fecha Fin</label>
+              <input type="date" [(ngModel)]="config.end_date" />
+            </div>
+            <div class="config-item">
+              <label>Capital Inicial (COP)</label>
+              <input type="number" [(ngModel)]="config.initial_capital" />
+            </div>
+            <div class="config-item">
+              <label>Confianza Minima</label>
+              <select [(ngModel)]="config.min_confidence">
+                <option [value]="0.90">90% (Recomendada)</option>
+                <option [value]="0.85">85%</option>
+                <option [value]="0.80">80%</option>
+                <option [value]="0.95">95%</option>
+              </select>
+            </div>
+          </div>
+          <div class="config-actions">
+            <button class="run-btn" (click)="runBacktest()" [disabled]="loading">
+              {{ loading ? 'Ejecutando...' : 'Ejecutar Backtest' }}
+            </button>
+            <button class="compare-btn" (click)="compareStrategies()" [disabled]="comparing">
+              {{ comparing ? 'Comparando...' : 'Comparar Todas' }}
+            </button>
+          </div>
+        </div>
+
+        <!-- Results Card -->
+        <div *ngIf="currentResult" class="results-card">
+          <h3>Resultados del Backtest</h3>
+          <div class="results-grid">
+            <div class="result-item highlight">
+              <span class="result-label">Retorno Total</span>
+              <span class="result-value" [class.positive]="currentResult.total_return_pct > 0"
+                    [class.negative]="currentResult.total_return_pct < 0">
+                {{ currentResult.total_return_pct > 0 ? '+' : '' }}{{ currentResult.total_return_pct | number:'1.2-2' }}%
+              </span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Capital Final</span>
+              <span class="result-value">$ {{ currentResult.final_capital | number:'1.0-0' }}</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Sharpe Ratio</span>
+              <span class="result-value" [class.good]="currentResult.sharpe_ratio > 1.5">
+                {{ currentResult.sharpe_ratio | number:'1.2-2' }}
+              </span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Max Drawdown</span>
+              <span class="result-value negative">-{{ currentResult.max_drawdown_pct | number:'1.2-2' }}%</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Win Rate</span>
+              <span class="result-value">{{ currentResult.win_rate * 100 | number:'1.1-1' }}%</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Total Trades</span>
+              <span class="result-value">{{ currentResult.total_trades }}</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Trades Rentables</span>
+              <span class="result-value">{{ currentResult.profitable_trades ?? 0 }}</span>
+            </div>
+            <div class="result-item">
+              <span class="result-label">Retorno Promedio/Trade</span>
+              <span class="result-value">{{ (currentResult.avg_trade_return ?? 0) * 100 | number:'1.3-3' }}%</span>
+            </div>
+          </div>
+
+          <div class="result-analysis">
+            <h4>Analisis</h4>
+            <div class="analysis-content">
+              <p *ngIf="currentResult.sharpe_ratio > 1.5" class="good">
+                ✅ Sharpe Ratio excelente (> 1.5). La estrategia tiene buen retorno ajustado al riesgo.
+              </p>
+              <p *ngIf="currentResult.sharpe_ratio <= 1.5 && currentResult.sharpe_ratio > 1" class="ok">
+                👍 Sharpe Ratio aceptable (1.0 - 1.5). Podria mejorarse.
+              </p>
+              <p *ngIf="currentResult.sharpe_ratio <= 1" class="warning">
+                ⚠️ Sharpe Ratio bajo (< 1). Considere ajustar parametros.
+              </p>
+
+              <p *ngIf="currentResult.max_drawdown_pct < 10" class="good">
+                ✅ Drawdown controlado (< 10%). Buen manejo del riesgo.
+              </p>
+              <p *ngIf="currentResult.max_drawdown_pct >= 10 && currentResult.max_drawdown_pct < 20" class="ok">
+                👍 Drawdown moderado (10-20%). Aceptable para trading.
+              </p>
+              <p *ngIf="currentResult.max_drawdown_pct >= 20" class="warning">
+                ⚠️ Drawdown alto (> 20%). Alto riesgo de perdidas.
+              </p>
+
+              <p *ngIf="currentResult.win_rate > 0.55" class="good">
+                ✅ Win rate positivo (> 55%). La estrategia acierta mas de lo que falla.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Comparison Results -->
+        <div *ngIf="comparisonResults.length > 0" class="comparison-card">
+          <h3>Comparacion de Estrategias</h3>
+          <div class="comparison-table">
+            <table>
+              <thead>
+                <tr>
+                  <th>Estrategia</th>
+                  <th>Modelo</th>
+                  <th>Retorno</th>
+                  <th>Sharpe</th>
+                  <th>Drawdown</th>
+                  <th>Win Rate</th>
+                  <th>Trades</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let r of comparisonResults; let i = index" [class.best]="i === 0">
+                  <td>{{ r.strategy }}</td>
+                  <td>{{ r.model_type }}</td>
+                  <td [class.positive]="r.total_return_pct > 0" [class.negative]="r.total_return_pct < 0">
+                    {{ r.total_return_pct | number:'1.2-2' }}%
+                  </td>
+                  <td>{{ r.sharpe_ratio | number:'1.2-2' }}</td>
+                  <td class="negative">-{{ r.max_drawdown_pct | number:'1.2-2' }}%</td>
+                  <td>{{ r.win_rate * 100 | number:'1.0-0' }}%</td>
+                  <td>{{ r.total_trades }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="best-note" *ngIf="comparisonResults.length > 0">
+            🏆 Mejor estrategia: <strong>{{ comparisonResults[0].strategy }} + {{ comparisonResults[0].model_type }}</strong>
+          </p>
+        </div>
+
+        <!-- History Card -->
+        <div class="history-card">
+          <h3>Historial de Backtests</h3>
+          <div class="history-list">
+            <div *ngFor="let bt of backtestHistory" class="history-item" (click)="loadResult(bt)">
+              <div class="history-main">
+                <span class="history-strategy">{{ bt.strategy_name }} / {{ bt.model_type }}</span>
+                <span class="history-date">{{ bt.start_date }} → {{ bt.end_date }}</span>
+              </div>
+              <div class="history-result" [class.positive]="bt.total_return_pct > 0"
+                   [class.negative]="bt.total_return_pct < 0">
+                {{ bt.total_return_pct > 0 ? '+' : '' }}{{ bt.total_return_pct | number:'1.2-2' }}%
+              </div>
+            </div>
+            <div *ngIf="backtestHistory.length === 0" class="no-history">
+              No hay backtests previos. Ejecuta uno para comenzar.
+            </div>
+          </div>
+        </div>
+
+        <!-- Presets -->
+        <div class="presets-card">
+          <h3>Presets Rapidos</h3>
+          <div class="presets-grid">
+            <button class="preset-btn" (click)="applyPreset('quick')">
+              <span class="preset-icon">⚡</span>
+              <span class="preset-name">Test Rapido</span>
+              <span class="preset-desc">1 ano, Ensemble</span>
+            </button>
+            <button class="preset-btn" (click)="applyPreset('full')">
+              <span class="preset-icon">📊</span>
+              <span class="preset-name">Test Completo</span>
+              <span class="preset-desc">5 anos, Ensemble</span>
+            </button>
+            <button class="preset-btn" (click)="applyPreset('prophet')">
+              <span class="preset-icon">🔮</span>
+              <span class="preset-name">Solo Prophet</span>
+              <span class="preset-desc">2 anos</span>
+            </button>
+            <button class="preset-btn" (click)="applyPreset('lstm')">
+              <span class="preset-icon">🧠</span>
+              <span class="preset-name">Solo LSTM</span>
+              <span class="preset-desc">2 anos</span>
+            </button>
+            <button class="preset-btn" (click)="applyPreset('high_conf')">
+              <span class="preset-icon">🎯</span>
+              <span class="preset-name">Alta Confianza</span>
+              <span class="preset-desc">95%, 3 anos</span>
+            </button>
+          </div>
+        </div>
+      </main>
+    </div>
+  

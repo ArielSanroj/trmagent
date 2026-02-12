@@ -1,0 +1,169 @@
+    <div class="predictions-page">
+      <header class="page-header">
+        <div class="header-content">
+          <a routerLink="/dashboard" class="back-link">← Dashboard</a>
+          <h1>Predicciones ML</h1>
+          <p>Analisis predictivo USD/COP con modelos Prophet, LSTM y Ensemble</p>
+        </div>
+      </header>
+
+      <main class="page-content">
+        <!-- Controls -->
+        <div class="controls-card">
+          <div class="control-group">
+            <label>Modelo</label>
+            <select [(ngModel)]="selectedModel">
+              <option value="ensemble">Ensemble (Recomendado)</option>
+              <option value="prophet">Prophet</option>
+              <option value="lstm">LSTM</option>
+            </select>
+          </div>
+          <div class="control-group">
+            <label>Dias a predecir</label>
+            <select [(ngModel)]="daysAhead">
+              <option [value]="7">7 dias</option>
+              <option [value]="14">14 dias</option>
+              <option [value]="30">30 dias</option>
+              <option [value]="60">60 dias</option>
+              <option [value]="90">90 dias</option>
+            </select>
+          </div>
+          <button class="generate-btn" (click)="generatePredictions()" [disabled]="loading">
+            {{ loading ? 'Generando...' : 'Generar Predicciones' }}
+          </button>
+        </div>
+
+        <div *ngIf="isMockData" class="mock-warning">
+          Servidor no conectado, mostrando mock up data.
+        </div>
+
+        <!-- Summary -->
+        <div *ngIf="summary" class="summary-cards">
+          <div class="summary-card">
+            <span class="summary-label">TRM Actual</span>
+            <span class="summary-value">$ {{ summary.current_trm | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Prediccion Promedio</span>
+            <span class="summary-value">$ {{ summary.average_prediction | number:'1.2-2' }}</span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Rango</span>
+            <span class="summary-value">
+              $ {{ summary.min_prediction | number:'1.0-0' }} - $ {{ summary.max_prediction | number:'1.0-0' }}
+            </span>
+          </div>
+          <div class="summary-card trend" [class]="summary.overall_trend.toLowerCase()">
+            <span class="summary-label">Tendencia</span>
+            <span class="summary-value">
+              {{ summary.overall_trend === 'ALCISTA' ? '📈' : summary.overall_trend === 'BAJISTA' ? '📉' : '➡️' }}
+              {{ summary.overall_trend }}
+            </span>
+          </div>
+          <div class="summary-card">
+            <span class="summary-label">Confianza Promedio</span>
+            <span class="summary-value">{{ summary.average_confidence | number:'1.1-1' }}%</span>
+          </div>
+        </div>
+
+        <!-- Predictions Chart -->
+        <div class="predictions-chart-card">
+          <h3>Pronostico Visual</h3>
+          <div class="chart-area">
+            <div class="chart-grid">
+              <!-- Y axis labels -->
+              <div class="y-axis">
+                <span>$ {{ range.maxValue | number:'1.0-0' }}</span>
+                <span>$ {{ range.midValue | number:'1.0-0' }}</span>
+                <span>$ {{ range.minValue | number:'1.0-0' }}</span>
+              </div>
+              <!-- Chart bars -->
+              <div class="chart-bars">
+                <div *ngFor="let pred of predictions; let i = index"
+                     class="prediction-bar-container"
+                     [title]="pred.target_date + ': $' + pred.predicted_value">
+                  <div class="confidence-range"
+                       [style.bottom.%]="getPosition(pred.lower_bound)"
+                       [style.height.%]="getPosition(pred.upper_bound) - getPosition(pred.lower_bound)">
+                  </div>
+                  <div class="prediction-bar"
+                       [style.bottom.%]="getPosition(pred.predicted_value)"
+                       [class.alcista]="pred.trend === 'ALCISTA'"
+                       [class.bajista]="pred.trend === 'BAJISTA'">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="chart-legend">
+              <span class="legend-item"><span class="dot alcista"></span> Alcista</span>
+              <span class="legend-item"><span class="dot bajista"></span> Bajista</span>
+              <span class="legend-item"><span class="range-box"></span> Intervalo 90%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Predictions Table -->
+        <div class="predictions-table-card">
+          <h3>Detalle de Predicciones</h3>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Fecha</th>
+                  <th>Prediccion</th>
+                  <th>Rango (90% IC)</th>
+                  <th>Confianza</th>
+                  <th>Tendencia</th>
+                  <th>Modelo</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let pred of predictions">
+                  <td>{{ pred.target_date | date:'mediumDate' }}</td>
+                  <td class="value">$ {{ pred.predicted_value | number:'1.2-2' }}</td>
+                  <td class="range">
+                    $ {{ pred.lower_bound | number:'1.0-0' }} - $ {{ pred.upper_bound | number:'1.0-0' }}
+                  </td>
+                  <td>
+                    <div class="confidence-bar">
+                      <div class="fill" [style.width.%]="pred.confidence * 100"></div>
+                      <span>{{ pred.confidence * 100 | number:'1.0-0' }}%</span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="trend-badge" [class]="pred.trend.toLowerCase()">
+                      {{ pred.trend === 'ALCISTA' ? '📈' : pred.trend === 'BAJISTA' ? '📉' : '➡️' }}
+                      {{ pred.trend }}
+                    </span>
+                  </td>
+                  <td>{{ pred.model_type }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Model Info -->
+        <div class="model-info-card">
+          <h3>Sobre los Modelos</h3>
+          <div class="models-grid">
+            <div class="model-item">
+              <h4>Prophet</h4>
+              <p>Modelo de Meta para series temporales. Excelente para capturar estacionalidad y tendencias. Rapido y robusto.</p>
+              <span class="model-badge">Recomendado para predicciones a corto plazo</span>
+            </div>
+            <div class="model-item">
+              <h4>LSTM</h4>
+              <p>Red neuronal recurrente (Deep Learning). Captura patrones temporales complejos. Requiere mas datos historicos.</p>
+              <span class="model-badge">Mejor para patrones no lineales</span>
+            </div>
+            <div class="model-item">
+              <h4>Ensemble</h4>
+              <p>Combinacion ponderada de Prophet y LSTM. Mayor robustez y precision al promediar multiples modelos.</p>
+              <span class="model-badge highlight">Recomendado para produccion</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  

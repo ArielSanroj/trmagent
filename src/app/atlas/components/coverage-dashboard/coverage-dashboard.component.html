@@ -1,0 +1,143 @@
+    <div class="atlas-dashboard">
+      <header class="dashboard-header">
+        <h1>ATLAS - Treasury Copilot</h1>
+        <p class="subtitle">FX Risk Management Dashboard</p>
+        <span class="last-update" *ngIf="lastUpdate">
+          Last updated: {{ lastUpdate | date:'medium' }}
+        </span>
+      </header>
+
+      <!-- Key Metrics -->
+      <section class="metrics-grid" *ngIf="dashboard">
+        <div class="metric-card">
+          <h3>Net Exposure</h3>
+          <div class="metric-value" [class.positive]="dashboard.coverage.net_exposure > 0" [class.negative]="dashboard.coverage.net_exposure < 0">
+            {{ dashboard.currency }} {{ dashboard.coverage.net_exposure | number:'1.0-0' }}
+          </div>
+          <span class="metric-label">Total FX exposure</span>
+        </div>
+
+        <div class="metric-card">
+          <h3>Coverage</h3>
+          <div class="metric-value coverage" [class.good]="dashboard.coverage.overall_coverage_pct >= 70" [class.warning]="dashboard.coverage.overall_coverage_pct >= 40 && dashboard.coverage.overall_coverage_pct < 70" [class.bad]="dashboard.coverage.overall_coverage_pct < 40">
+            {{ dashboard.coverage.overall_coverage_pct | number:'1.1-1' }}%
+          </div>
+          <span class="metric-label">Overall hedge ratio</span>
+        </div>
+
+        <div class="metric-card">
+          <h3>Payables Coverage</h3>
+          <div class="metric-value">
+            {{ dashboard.coverage.payables_coverage_pct | number:'1.1-1' }}%
+          </div>
+          <span class="metric-label">Accounts payable hedged</span>
+        </div>
+
+        <div class="metric-card">
+          <h3>Receivables Coverage</h3>
+          <div class="metric-value">
+            {{ dashboard.coverage.receivables_coverage_pct | number:'1.1-1' }}%
+          </div>
+          <span class="metric-label">Accounts receivable hedged</span>
+        </div>
+      </section>
+
+      <!-- Exposure Summary by Horizon -->
+      <section class="horizon-section" *ngIf="exposureSummary">
+        <h2>Exposure by Time Horizon</h2>
+        <div class="horizon-grid">
+          <div class="horizon-card" *ngFor="let horizon of horizons">
+            <h4>{{ horizon.label }}</h4>
+            <div class="horizon-stats" *ngIf="exposureSummary.by_horizon[horizon.key] as h">
+              <div class="stat">
+                <span class="stat-label">Total</span>
+                <span class="stat-value">{{ h.total | number:'1.0-0' }}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-label">Open</span>
+                <span class="stat-value">{{ h.open | number:'1.0-0' }}</span>
+              </div>
+              <div class="stat">
+                <span class="stat-label">Coverage</span>
+                <span class="stat-value" [class.good]="h.coverage_pct >= 70">{{ h.coverage_pct | number:'1.1-1' }}%</span>
+              </div>
+              <div class="coverage-bar">
+                <div class="coverage-fill" [style.width.%]="h.coverage_pct"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pending Recommendations -->
+      <section class="recommendations-section" *ngIf="pendingRecommendations.length > 0">
+        <h2>Pending Recommendations</h2>
+        <div class="recommendations-list">
+          <div class="recommendation-card" *ngFor="let rec of pendingRecommendations" [class]="'urgency-' + rec.urgency">
+            <div class="rec-header">
+              <span class="rec-action" [class]="'action-' + rec.action">{{ formatAction(rec.action) }}</span>
+              <span class="rec-urgency">{{ rec.urgency }}</span>
+            </div>
+            <div class="rec-body">
+              <div class="rec-amount">{{ rec.currency }} {{ rec.amount_to_hedge | number:'1.0-0' }}</div>
+              <div class="rec-details">
+                <span>Days to maturity: {{ rec.days_to_maturity }}</span>
+                <span>Target coverage: {{ rec.target_coverage }}%</span>
+              </div>
+            </div>
+            <div class="rec-actions">
+              <button class="btn btn-accept" (click)="acceptRecommendation(rec)">Accept</button>
+              <button class="btn btn-reject" (click)="rejectRecommendation(rec)">Reject</button>
+            </div>
+          </div>
+        </div>
+        <a routerLink="/atlas/recommendations" class="view-all">View all recommendations</a>
+      </section>
+
+      <!-- Maturity Ladder Preview -->
+      <section class="maturity-section" *ngIf="maturityLadder">
+        <h2>Maturity Ladder (Next 8 Weeks)</h2>
+        <div class="maturity-chart">
+          <div class="maturity-bar" *ngFor="let bucket of maturityLadder.buckets.slice(0, 8)">
+            <div class="bar-container">
+              <div class="bar-total" [style.height.%]="getBarHeight(bucket.total)"></div>
+              <div class="bar-hedged" [style.height.%]="getBarHeight(bucket.hedged)"></div>
+            </div>
+            <span class="bar-label">{{ formatBucketDate(bucket.start_date) }}</span>
+          </div>
+        </div>
+        <div class="maturity-legend">
+          <span class="legend-item"><span class="legend-color total"></span> Total Exposure</span>
+          <span class="legend-item"><span class="legend-color hedged"></span> Hedged</span>
+        </div>
+      </section>
+
+      <!-- Quick Actions -->
+      <section class="quick-actions">
+        <h2>Quick Actions</h2>
+        <div class="action-buttons">
+          <a routerLink="/atlas/exposures" class="action-btn">
+            <span class="action-icon">+</span>
+            Manage Exposures
+          </a>
+          <a routerLink="/atlas/policies" class="action-btn">
+            <span class="action-icon">*</span>
+            Configure Policies
+          </a>
+          <a routerLink="/atlas/recommendations" class="action-btn">
+            <span class="action-icon">!</span>
+            Review Recommendations
+          </a>
+          <a routerLink="/atlas/execution" class="action-btn">
+            <span class="action-icon">></span>
+            Execution Console
+          </a>
+        </div>
+      </section>
+
+      <div class="loading-overlay" *ngIf="loading">
+        <div class="spinner"></div>
+        <span>Loading dashboard...</span>
+      </div>
+    </div>
+  

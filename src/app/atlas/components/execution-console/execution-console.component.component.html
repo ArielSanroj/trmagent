@@ -1,0 +1,181 @@
+    <div class="execution-console">
+      <header class="page-header">
+        <h1>Execution Console</h1>
+      </header>
+
+      <!-- Summary -->
+      <section class="summary" *ngIf="orderSummary">
+        <div class="summary-card">
+          <span class="count">{{ orderSummary.by_status?.pending_approval || 0 }}</span>
+          <span class="label">Pending Approval</span>
+        </div>
+        <div class="summary-card">
+          <span class="count">{{ orderSummary.pending_approval_amount | number:'1.0-0' }}</span>
+          <span class="label">USD Pending</span>
+        </div>
+        <div class="summary-card">
+          <span class="count">{{ orderSummary.by_status?.approved || 0 }}</span>
+          <span class="label">Ready to Execute</span>
+        </div>
+        <div class="summary-card">
+          <span class="count">{{ orderSummary.executed_today || 0 }}</span>
+          <span class="label">Executed Today</span>
+        </div>
+      </section>
+
+      <!-- Filters -->
+      <section class="filters">
+        <select [(ngModel)]="filters.status" (change)="loadOrders()">
+          <option value="">All Statuses</option>
+          <option value="pending_approval">Pending Approval</option>
+          <option value="approved">Approved</option>
+          <option value="quoted">Quoted</option>
+          <option value="executed">Executed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </section>
+
+      <!-- Orders List -->
+      <section class="orders-list">
+        <div class="order-card" *ngFor="let order of orders" [class]="'status-' + order.status">
+          <div class="order-header">
+            <span class="order-ref">{{ order.internal_reference }}</span>
+            <span class="status-badge" [class]="order.status">{{ formatStatus(order.status) }}</span>
+          </div>
+
+          <div class="order-body">
+            <div class="order-main">
+              <span class="side" [class]="order.side">{{ order.side.toUpperCase() }}</span>
+              <span class="amount">{{ order.currency }} {{ order.amount | number:'1.0-0' }}</span>
+              <span class="type">{{ order.order_type }}</span>
+            </div>
+
+            <div class="order-details">
+              <div class="detail" *ngIf="order.target_rate">
+                <span class="label">Target Rate</span>
+                <span class="value">{{ order.target_rate | number:'1.4-4' }}</span>
+              </div>
+              <div class="detail" *ngIf="order.market_rate_at_creation">
+                <span class="label">Market Rate (at creation)</span>
+                <span class="value">{{ order.market_rate_at_creation | number:'1.4-4' }}</span>
+              </div>
+              <div class="detail" *ngIf="order.settlement_date">
+                <span class="label">Settlement Date</span>
+                <span class="value">{{ order.settlement_date | date:'mediumDate' }}</span>
+              </div>
+              <div class="detail">
+                <span class="label">Created</span>
+                <span class="value">{{ order.created_at | date:'short' }}</span>
+              </div>
+            </div>
+
+            <div class="order-notes" *ngIf="order.notes">
+              <strong>Notes:</strong> {{ order.notes }}
+            </div>
+          </div>
+
+          <div class="order-actions">
+            <!-- Pending Approval -->
+            <ng-container *ngIf="order.status === 'pending_approval'">
+              <button class="btn btn-success" (click)="approveOrder(order)">Approve</button>
+              <button class="btn btn-secondary" (click)="rejectOrder(order)">Reject</button>
+            </ng-container>
+
+            <!-- Approved - Ready to get quotes -->
+            <ng-container *ngIf="order.status === 'approved'">
+              <button class="btn btn-primary" (click)="showQuoteModal(order)">Add Quote</button>
+              <button class="btn btn-secondary" (click)="cancelOrder(order)">Cancel</button>
+            </ng-container>
+
+            <!-- Quoted - Ready to execute -->
+            <ng-container *ngIf="order.status === 'quoted'">
+              <button class="btn btn-success" (click)="showExecuteModal(order)">Execute</button>
+              <button class="btn btn-secondary" (click)="cancelOrder(order)">Cancel</button>
+            </ng-container>
+
+            <!-- Executed -->
+            <ng-container *ngIf="order.status === 'executed'">
+              <span class="executed-info">
+                Executed at {{ order.executed_at | date:'short' }}
+                <span *ngIf="order.bank_reference">| Ref: {{ order.bank_reference }}</span>
+              </span>
+            </ng-container>
+          </div>
+        </div>
+
+        <div class="empty-state" *ngIf="orders.length === 0 && !loading">
+          <p>No orders found. Orders are created from accepted recommendations.</p>
+        </div>
+
+        <div class="loading" *ngIf="loading">Loading orders...</div>
+      </section>
+
+      <!-- Add Quote Modal -->
+      <div class="modal" *ngIf="showQuote" (click)="closeQuoteModal($event)">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <h3>Add Quote for {{ selectedOrder?.internal_reference }}</h3>
+          <form (ngSubmit)="submitQuote()">
+            <div class="form-group">
+              <label>Provider/Bank *</label>
+              <input type="text" [(ngModel)]="quoteData.provider" name="provider" placeholder="e.g., Bancolombia">
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Bid Rate</label>
+                <input type="number" [(ngModel)]="quoteData.bid_rate" name="bid_rate" step="0.0001">
+              </div>
+              <div class="form-group">
+                <label>Ask Rate</label>
+                <input type="number" [(ngModel)]="quoteData.ask_rate" name="ask_rate" step="0.0001">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Provider Reference</label>
+              <input type="text" [(ngModel)]="quoteData.provider_reference" name="provider_reference">
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" (click)="showQuote = false">Cancel</button>
+              <button type="submit" class="btn btn-primary" [disabled]="!quoteData.provider">Add Quote</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Execute Modal -->
+      <div class="modal" *ngIf="showExecute" (click)="closeExecuteModal($event)">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <h3>Execute Order {{ selectedOrder?.internal_reference }}</h3>
+          <form (ngSubmit)="submitExecution()">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Executed Rate *</label>
+                <input type="number" [(ngModel)]="executeData.executed_rate" name="executed_rate" step="0.0001" required>
+              </div>
+              <div class="form-group">
+                <label>Bank Reference</label>
+                <input type="text" [(ngModel)]="executeData.bank_reference" name="bank_reference">
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Trade Date *</label>
+                <input type="date" [(ngModel)]="executeData.trade_date" name="trade_date" required>
+              </div>
+              <div class="form-group">
+                <label>Value Date *</label>
+                <input type="date" [(ngModel)]="executeData.value_date" name="value_date" required>
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Counterparty Bank</label>
+              <input type="text" [(ngModel)]="executeData.counterparty_bank" name="counterparty_bank">
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" (click)="showExecute = false">Cancel</button>
+              <button type="submit" class="btn btn-success">Confirm Execution</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  

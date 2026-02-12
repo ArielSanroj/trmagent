@@ -1,27 +1,85 @@
-# MiPrimerAgente
+# TRM Agent
 
-This project was generated with [Angular CLI](https://github.com/angular/angular-cli) version 18.2.21.
+Sistema para analisis, proyeccion y ejecucion de estrategias sobre USD/COP (TRM) en Colombia. Incluye un frontend Angular para visualizacion y un backend FastAPI con modelos de ML e integracion con ATLAS.
 
-## Development server
+## Estructura
 
-Run `ng serve` for a dev server. Navigate to `http://localhost:4200/`. The application will automatically reload if you change any of the source files.
+```
+trm agent/
+├── src/                          # Frontend Angular
+├── public/
+├── angular.json, tsconfig.json
+├── package.json
+├── ATRIBUTOS_DE_CALIDAD.md
+├── REQUERIMIENTOS_NO_TECNICOS.md
+├── backend/
+│   ├── app/                      # API principal
+│   ├── alembic/                  # Migraciones
+│   ├── models/                   # Modelos ML
+│   ├── tests/
+│   ├── requirements.txt
+│   ├── docker-compose.yml
+│   ├── Dockerfile
+│   └── simulate_hedging.py
+└── CLAUDE.md                     # Reglas del proyecto
+```
 
-## Code scaffolding
+## Arquitectura (alto nivel)
 
-Run `ng generate component component-name` to generate a new component. You can also use `ng generate directive|pipe|service|class|guard|interface|enum|module`.
+```mermaid
+graph TB
+  UI[Angular UI] --> API[FastAPI]
+  API --> SVC[Services]
+  SVC --> ML[ML Models]
+  SVC --> DB[(PostgreSQL)]
+  SVC --> ATLAS[ATLAS]
+  SVC --> FX[Market Data]
+```
 
-## Build
+## Quick start
 
-Run `ng build` to build the project. The build artifacts will be stored in the `dist/` directory.
+### Frontend
 
-## Running unit tests
+```bash
+npm install
+npm start
+```
 
-Run `ng test` to execute the unit tests via [Karma](https://karma-runner.github.io).
+Aplicacion en `http://localhost:4200`.
 
-## Running end-to-end tests
+### Backend
 
-Run `ng e2e` to execute the end-to-end tests via a platform of your choice. To use this command, you need to first add a package that implements end-to-end testing capabilities.
+```bash
+cd backend
+python -m venv .venv
+. .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+```
 
-## Further help
+API docs en `http://localhost:8000/docs`.
 
-To get more help on the Angular CLI use `ng help` or go check out the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+## Configuracion
+
+Variables en `backend/.env` (ver `backend/.env.example`).
+
+Ejemplos:
+- `DATABASE_URL`
+- `REDIS_URL`
+- `JWT_SECRET`
+- `TELEGRAM_BOT_TOKEN`
+- `SLACK_WEBHOOK_URL`
+
+## Pruebas
+
+```bash
+# Backend
+cd backend
+pytest -q
+```
+
+## Documentacion adicional
+
+- `ATRIBUTOS_DE_CALIDAD.md`
+- `REQUERIMIENTOS_NO_TECNICOS.md`
+- `backend/README.md`

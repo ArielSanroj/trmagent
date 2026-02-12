@@ -1,0 +1,70 @@
+    .recommendation-panel { padding: 20px; max-width: 1200px; margin: 0 auto; }
+    .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .page-header h1 { margin: 0; }
+
+    .btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; }
+    .btn-primary { background: #007bff; color: white; }
+    .btn-accept { background: #28a745; color: white; }
+    .btn-reject { background: #e9ecef; color: #333; }
+    .btn-secondary { background: #6c757d; color: white; }
+
+    .summary { display: flex; gap: 30px; background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .summary-item { display: flex; flex-direction: column; }
+    .summary-item .count { font-size: 28px; font-weight: bold; color: #1a1a2e; }
+    .summary-item .label { font-size: 12px; color: #666; }
+    .urgency-breakdown { flex-direction: row; gap: 10px; align-items: center; }
+    .urgency { padding: 4px 8px; border-radius: 4px; font-size: 11px; }
+    .urgency.critical { background: #f8d7da; color: #721c24; }
+    .urgency.high { background: #fff3cd; color: #856404; }
+    .urgency.normal { background: #e2e3e5; color: #383d41; }
+    .urgency.low { background: #d4edda; color: #155724; }
+
+    .filters { display: flex; gap: 10px; margin-bottom: 20px; }
+    .filters select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 4px; }
+
+    .recommendations-list { display: grid; gap: 15px; }
+
+    .recommendation-card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); border-left: 4px solid #6c757d; }
+    .recommendation-card.urgency-critical { border-left-color: #dc3545; }
+    .recommendation-card.urgency-high { border-left-color: #fd7e14; }
+    .recommendation-card.urgency-normal { border-left-color: #ffc107; }
+    .recommendation-card.urgency-low { border-left-color: #6c757d; }
+    .recommendation-card.status-accepted { opacity: 0.7; }
+    .recommendation-card.status-rejected { opacity: 0.5; }
+    .recommendation-card.status-expired { opacity: 0.5; }
+
+    .rec-header { display: flex; gap: 10px; margin-bottom: 15px; }
+    .action-badge, .urgency-badge, .status-badge { padding: 4px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+    .action-badge { background: #e9ecef; color: #333; }
+    .action-badge.hedge_now { background: #f8d7da; color: #721c24; }
+    .action-badge.hedge_partial { background: #fff3cd; color: #856404; }
+    .action-badge.wait { background: #d1ecf1; color: #0c5460; }
+    .action-badge.review { background: #e2e3e5; color: #383d41; }
+    .urgency-badge { background: #f8f9fa; color: #666; }
+    .status-badge { background: #f8f9fa; color: #666; }
+
+    .rec-body .amount { margin-bottom: 15px; }
+    .rec-body .amount .currency { font-size: 14px; color: #666; margin-right: 5px; }
+    .rec-body .amount .value { font-size: 32px; font-weight: bold; color: #1a1a2e; }
+
+    .details { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; margin-bottom: 15px; }
+    .detail { display: flex; flex-direction: column; }
+    .detail .label { font-size: 11px; color: #666; }
+    .detail .value { font-size: 16px; font-weight: 600; }
+
+    .reasoning { font-size: 14px; color: #666; line-height: 1.5; margin-bottom: 10px; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+    .valid-until { font-size: 12px; color: #999; }
+
+    .rec-actions { display: flex; gap: 10px; margin-top: 15px; padding-top: 15px; border-top: 1px solid #eee; }
+    .rejection-info { margin-top: 15px; padding: 10px; background: #fff3cd; border-radius: 4px; font-size: 13px; }
+
+    .empty-state, .loading { text-align: center; padding: 40px; color: #666; }
+
+    .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+    .modal-content { background: white; border-radius: 8px; padding: 30px; width: 100%; max-width: 400px; }
+    .modal-content h3 { margin: 0 0 20px; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+    .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; }
+  

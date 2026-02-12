@@ -1,0 +1,245 @@
+    <div class="exposure-manager">
+      <header class="page-header">
+        <h1>Exposure Manager</h1>
+        <div class="header-actions">
+          <button class="btn btn-secondary" (click)="showUploadModal = true">
+            Upload CSV
+          </button>
+          <button class="btn btn-primary" (click)="showCreateModal = true">
+            + New Exposure
+          </button>
+        </div>
+      </header>
+
+      <!-- Summary Cards -->
+      <section class="summary-cards" *ngIf="summary">
+        <div class="summary-card">
+          <h4>Total Payables</h4>
+          <span class="amount">USD {{ summary.total_payables | number:'1.0-0' }}</span>
+          <span class="coverage">{{ getCoveragePercent(summary.total_hedged_payables, summary.total_payables) | number:'1.1-1' }}% covered</span>
+        </div>
+        <div class="summary-card">
+          <h4>Total Receivables</h4>
+          <span class="amount">USD {{ summary.total_receivables | number:'1.0-0' }}</span>
+          <span class="coverage">{{ getCoveragePercent(summary.total_hedged_receivables, summary.total_receivables) | number:'1.1-1' }}% covered</span>
+        </div>
+        <div class="summary-card">
+          <h4>Net Exposure</h4>
+          <span class="amount" [class.positive]="summary.net_exposure > 0" [class.negative]="summary.net_exposure < 0">
+            USD {{ summary.net_exposure | number:'1.0-0' }}
+          </span>
+        </div>
+        <div class="summary-card">
+          <h4>Total Exposures</h4>
+          <span class="amount">{{ summary.exposures_count }}</span>
+        </div>
+      </section>
+
+      <!-- Filters -->
+      <section class="filters">
+        <select [(ngModel)]="filters.exposure_type" (change)="loadExposures()">
+          <option value="">All Types</option>
+          <option value="payable">Payables</option>
+          <option value="receivable">Receivables</option>
+        </select>
+        <select [(ngModel)]="filters.status" (change)="loadExposures()">
+          <option value="">All Statuses</option>
+          <option value="open">Open</option>
+          <option value="partially_hedged">Partially Hedged</option>
+          <option value="fully_hedged">Fully Hedged</option>
+        </select>
+        <input type="date" [(ngModel)]="filters.due_date_from" (change)="loadExposures()" placeholder="Due from">
+        <input type="date" [(ngModel)]="filters.due_date_to" (change)="loadExposures()" placeholder="Due to">
+      </section>
+
+      <!-- Exposures Table -->
+      <section class="exposures-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Reference</th>
+              <th>Type</th>
+              <th>Amount</th>
+              <th>Due Date</th>
+              <th>Coverage</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let exp of exposures" [class]="'status-' + exp.status">
+              <td>
+                <strong>{{ exp.reference }}</strong>
+                <br><small>{{ exp.description }}</small>
+              </td>
+              <td>
+                <span class="type-badge" [class]="exp.exposure_type">
+                  {{ exp.exposure_type === 'payable' ? 'Payable' : 'Receivable' }}
+                </span>
+              </td>
+              <td class="amount-cell">
+                {{ exp.currency }} {{ exp.amount | number:'1.0-0' }}
+                <br><small class="open-amount">Open: {{ exp.amount - exp.amount_hedged | number:'1.0-0' }}</small>
+              </td>
+              <td>
+                {{ exp.due_date | date:'mediumDate' }}
+                <br><small>{{ exp.days_to_maturity }} days</small>
+              </td>
+              <td>
+                <div class="coverage-indicator">
+                  <div class="coverage-bar-mini">
+                    <div class="fill" [style.width.%]="exp.hedge_percentage"></div>
+                  </div>
+                  <span>{{ exp.hedge_percentage | number:'1.1-1' }}%</span>
+                </div>
+              </td>
+              <td>
+                <span class="status-badge" [class]="exp.status">{{ formatStatus(exp.status) }}</span>
+              </td>
+              <td class="actions-cell">
+                <button class="btn-icon" (click)="viewExposure(exp)" title="View">👁</button>
+                <button class="btn-icon" (click)="editExposure(exp)" title="Edit">✏️</button>
+                <button class="btn-icon" (click)="deleteExposure(exp)" title="Cancel">🗑</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="empty-state" *ngIf="exposures.length === 0 && !loading">
+          <p>No exposures found. Create one or upload a CSV file.</p>
+        </div>
+
+        <div class="loading" *ngIf="loading">Loading exposures...</div>
+      </section>
+
+      <!-- Create/Edit Modal -->
+      <div class="modal" *ngIf="showCreateModal" (click)="closeModal($event)">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <h2>{{ editingExposure ? 'Edit Exposure' : 'New Exposure' }}</h2>
+          <form [formGroup]="exposureForm" (ngSubmit)="saveExposure()">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Type *</label>
+                <select formControlName="exposure_type">
+                  <option value="payable">Payable (Buy USD)</option>
+                  <option value="receivable">Receivable (Sell USD)</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Reference *</label>
+                <input type="text" formControlName="reference" placeholder="Invoice #, PO #">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Amount *</label>
+                <input type="number" formControlName="amount" step="0.01">
+              </div>
+              <div class="form-group">
+                <label>Currency</label>
+                <select formControlName="currency">
+                  <option value="USD">USD</option>
+                  <option value="EUR">EUR</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Due Date *</label>
+                <input type="date" formControlName="due_date">
+              </div>
+              <div class="form-group">
+                <label>Invoice Date</label>
+                <input type="date" formControlName="invoice_date">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Description</label>
+              <textarea formControlName="description" rows="2"></textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Budget Rate</label>
+                <input type="number" formControlName="budget_rate" step="0.0001">
+              </div>
+              <div class="form-group">
+                <label>Target Rate</label>
+                <input type="number" formControlName="target_rate" step="0.0001">
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button type="button" class="btn btn-secondary" (click)="showCreateModal = false">Cancel</button>
+              <button type="submit" class="btn btn-primary" [disabled]="!exposureForm.valid">
+                {{ editingExposure ? 'Update' : 'Create' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Upload Modal -->
+      <div class="modal" *ngIf="showUploadModal" (click)="closeModal($event)">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <h2>Upload Exposures from CSV</h2>
+
+          <div class="upload-instructions">
+            <p>Upload a CSV file with the following columns:</p>
+            <code>reference, type, amount, currency, due_date, counterparty, description, invoice_date</code>
+            <ul>
+              <li><strong>type:</strong> "payable" or "receivable"</li>
+              <li><strong>due_date:</strong> YYYY-MM-DD format</li>
+            </ul>
+          </div>
+
+          <div class="upload-area" [class.dragover]="isDragOver"
+               (dragover)="onDragOver($event)"
+               (dragleave)="onDragLeave($event)"
+               (drop)="onDrop($event)">
+            <input type="file" #fileInput accept=".csv" (change)="onFileSelected($event)" hidden>
+            <p *ngIf="!selectedFile">
+              Drag & drop a CSV file here, or
+              <button class="btn-link" (click)="fileInput.click()">browse</button>
+            </p>
+            <p *ngIf="selectedFile">
+              Selected: {{ selectedFile.name }}
+              <button class="btn-link" (click)="selectedFile = null">Remove</button>
+            </p>
+          </div>
+
+          <div class="upload-result" *ngIf="uploadResult">
+            <h4>Upload Results</h4>
+            <ul>
+              <li>Total rows: {{ uploadResult.total_rows }}</li>
+              <li class="success">Created: {{ uploadResult.created }}</li>
+              <li class="info">Updated: {{ uploadResult.updated }}</li>
+              <li class="error" *ngIf="uploadResult.errors > 0">Errors: {{ uploadResult.errors }}</li>
+            </ul>
+            <div class="error-details" *ngIf="uploadResult?.error_details?.length || 0 > 0">
+              <h5>Error Details:</h5>
+              <ul>
+                <li *ngFor="let err of uploadResult.error_details.slice(0, 5)">
+                  Row {{ err.row }}: {{ err.error }}
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary" (click)="showUploadModal = false; uploadResult = null">
+              Close
+            </button>
+            <button type="button" class="btn btn-primary"
+                    [disabled]="!selectedFile || uploading"
+                    (click)="uploadFile()">
+              {{ uploading ? 'Uploading...' : 'Upload' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  

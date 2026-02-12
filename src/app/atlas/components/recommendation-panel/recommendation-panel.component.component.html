@@ -1,0 +1,128 @@
+    <div class="recommendation-panel">
+      <header class="page-header">
+        <h1>Hedge Recommendations</h1>
+        <button class="btn btn-primary" (click)="generateRecommendations()">
+          Generate New
+        </button>
+      </header>
+
+      <!-- Summary -->
+      <section class="summary" *ngIf="summary">
+        <div class="summary-item">
+          <span class="count">{{ summary.pending_count }}</span>
+          <span class="label">Pending</span>
+        </div>
+        <div class="summary-item">
+          <span class="count">{{ summary.total_amount_to_hedge | number:'1.0-0' }}</span>
+          <span class="label">USD to Hedge</span>
+        </div>
+        <div class="summary-item urgency-breakdown">
+          <span class="urgency critical" *ngIf="summary.by_urgency?.critical">{{ summary.by_urgency.critical }} Critical</span>
+          <span class="urgency high" *ngIf="summary.by_urgency?.high">{{ summary.by_urgency.high }} High</span>
+          <span class="urgency normal" *ngIf="summary.by_urgency?.normal">{{ summary.by_urgency.normal }} Normal</span>
+          <span class="urgency low" *ngIf="summary.by_urgency?.low">{{ summary.by_urgency.low }} Low</span>
+        </div>
+      </section>
+
+      <!-- Filters -->
+      <section class="filters">
+        <select [(ngModel)]="filters.status" (change)="loadRecommendations()">
+          <option value="">All Statuses</option>
+          <option value="pending">Pending</option>
+          <option value="accepted">Accepted</option>
+          <option value="rejected">Rejected</option>
+          <option value="expired">Expired</option>
+        </select>
+        <select [(ngModel)]="filters.urgency" (change)="loadRecommendations()">
+          <option value="">All Urgency</option>
+          <option value="critical">Critical</option>
+          <option value="high">High</option>
+          <option value="normal">Normal</option>
+          <option value="low">Low</option>
+        </select>
+        <select [(ngModel)]="filters.action" (change)="loadRecommendations()">
+          <option value="">All Actions</option>
+          <option value="hedge_now">Hedge Now</option>
+          <option value="hedge_partial">Partial Hedge</option>
+          <option value="wait">Wait</option>
+          <option value="review">Review</option>
+        </select>
+      </section>
+
+      <!-- Recommendations List -->
+      <section class="recommendations-list">
+        <div class="recommendation-card" *ngFor="let rec of recommendations"
+             [class]="'urgency-' + rec.urgency + ' status-' + rec.status">
+          <div class="rec-header">
+            <span class="action-badge" [class]="rec.action">{{ formatAction(rec.action) }}</span>
+            <span class="urgency-badge">{{ rec.urgency }}</span>
+            <span class="status-badge">{{ rec.status }}</span>
+          </div>
+
+          <div class="rec-body">
+            <div class="amount">
+              <span class="currency">{{ rec.currency }}</span>
+              <span class="value">{{ rec.amount_to_hedge | number:'1.0-0' }}</span>
+            </div>
+
+            <div class="details">
+              <div class="detail">
+                <span class="label">Days to Maturity</span>
+                <span class="value">{{ rec.days_to_maturity }}</span>
+              </div>
+              <div class="detail">
+                <span class="label">Current Coverage</span>
+                <span class="value">{{ rec.current_coverage }}%</span>
+              </div>
+              <div class="detail">
+                <span class="label">Target Coverage</span>
+                <span class="value">{{ rec.target_coverage }}%</span>
+              </div>
+              <div class="detail" *ngIf="rec.confidence">
+                <span class="label">Confidence</span>
+                <span class="value">{{ rec.confidence }}%</span>
+              </div>
+            </div>
+
+            <div class="reasoning" *ngIf="rec.reasoning">
+              <strong>Reasoning:</strong> {{ rec.reasoning }}
+            </div>
+
+            <div class="valid-until" *ngIf="rec.valid_until && rec.status === 'pending'">
+              Valid until: {{ rec.valid_until | date:'short' }}
+            </div>
+          </div>
+
+          <div class="rec-actions" *ngIf="rec.status === 'pending'">
+            <button class="btn btn-accept" (click)="accept(rec)">Accept & Create Order</button>
+            <button class="btn btn-reject" (click)="showRejectModal(rec)">Reject</button>
+          </div>
+
+          <div class="rejection-info" *ngIf="rec.status === 'rejected' && rec.rejection_reason">
+            <strong>Rejection reason:</strong> {{ rec.rejection_reason }}
+          </div>
+        </div>
+
+        <div class="empty-state" *ngIf="recommendations.length === 0 && !loading">
+          <p>No recommendations found. Generate new recommendations or adjust your filters.</p>
+        </div>
+
+        <div class="loading" *ngIf="loading">Loading recommendations...</div>
+      </section>
+
+      <!-- Reject Modal -->
+      <div class="modal" *ngIf="showReject" (click)="closeRejectModal($event)">
+        <div class="modal-content" (click)="$event.stopPropagation()">
+          <h3>Reject Recommendation</h3>
+          <div class="form-group">
+            <label>Reason (optional)</label>
+            <textarea [(ngModel)]="rejectReason" rows="3" placeholder="Why are you rejecting this recommendation?"></textarea>
+          </div>
+          <div class="form-actions">
+            <button class="btn btn-secondary" (click)="showReject = false">Cancel</button>
+            <button class="btn btn-primary" (click)="confirmReject()">Reject</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  

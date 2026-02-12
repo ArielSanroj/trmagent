@@ -1,0 +1,354 @@
+    <div class="dashboard">
+      <header class="header">
+        <div class="header-left">
+          <h1>TRM Agent</h1>
+          <button class="run-model-btn" (click)="runModel()" [disabled]="isRunning">
+            <span class="btn-icon">{{ isRunning ? '⏳' : '▶' }}</span>
+            {{ isRunning ? 'Ejecutando...' : 'Correr Modelo' }}
+          </button>
+        </div>
+        <span class="status" [class.online]="isOnline">{{ isOnline ? 'Conectado' : 'Offline' }}</span>
+      </header>
+
+      <!-- Panel TRM + Señal -->
+      <section class="main-panel">
+        <div class="trm-display">
+          <div class="trm-current">
+            <span class="label">TRM HOY</span>
+            <span class="value">{{ currentTRM | number:'1.2-2' }}</span>
+            <span class="change" [class.up]="trmChange > 0" [class.down]="trmChange < 0">
+              {{ trmChange > 0 ? '▲' : trmChange < 0 ? '▼' : '—' }} {{ trmChange | number:'1.2-2' }}%
+            </span>
+          </div>
+          <div class="trm-prediction">
+            <span class="label">PREDICCIÓN 30D</span>
+            <span class="value" [class.up]="predictedTRM > currentTRM" [class.down]="predictedTRM < currentTRM">
+              {{ predictedTRM | number:'1.2-2' }}
+            </span>
+            <span class="confidence">{{ predictionConfidence }}% confianza</span>
+          </div>
+        </div>
+
+        <div class="signal-display" [class]="signalClass">
+          <div class="signal-action">
+            <span class="signal-icon">{{ signalIcon }}</span>
+            <span class="signal-text">{{ signalText }}</span>
+          </div>
+          <div class="signal-meta">
+            <span>Retorno: <strong>{{ expectedReturn }}%</strong></span>
+            <span>Confianza: <strong>{{ signalConfidence }}%</strong></span>
+          </div>
+          <p class="signal-reason">{{ signalReason }}</p>
+        </div>
+
+        <!-- Risk & Hedging Panel -->
+        <div class="risk-panel">
+          <div class="risk-score-box" [ngClass]="riskLevelClass">
+             <div class="risk-header">
+               <span class="risk-icon">⚠️</span>
+               <h3>NIVEL DE RIESGO</h3>
+             </div>
+             <div class="risk-gauge-container">
+               <div class="risk-value">{{ riskScore | number:'1.0-0' }}<span class="max-score">/100</span></div>
+               <div class="risk-label">{{ riskLevel }}</div>
+             </div>
+             <p class="risk-desc">{{ riskRecommendation }}</p>
+          </div>
+
+          <div class="hedging-calculator">
+            <h3>🛡️ Asistente de Cobertura</h3>
+            <div class="hedge-form">
+              <div class="form-group">
+                <label>Monto a Proteger (USD)</label>
+                <input type="number" [(ngModel)]="hedgeAmount" placeholder="100,000">
+              </div>
+              <div class="form-group">
+                <label>Horizonte (Días)</label>
+                <select [(ngModel)]="hedgeHorizon">
+                  <option [value]="7">7 días</option>
+                  <option [value]="15">15 días</option>
+                  <option [value]="30">30 días</option>
+                  <option [value]="60">60 días</option>
+                </select>
+              </div>
+              <button class="calc-btn" (click)="calculateHedging()">Analizar Cobertura</button>
+            </div>
+            
+            <div class="hedge-result" *ngIf="hedgingResult" [ngClass]="hedgingResult.urgency">
+              <div class="hedge-action">{{ hedgingResult.action }}</div>
+              <div class="hedge-details">
+                <span>Cubrir: <strong>{{ hedgingResult.amount_to_hedge | currency:'USD' }}</strong></span>
+                <span>Tasa Obj: <strong>{{ hedgingResult.suggested_rate | currency:'COP':'symbol':'1.0-0' }}</strong></span>
+              </div>
+              <ul class="hedge-reasons">
+                <li *ngFor="let reason of hedgingResult.reasoning">• {{ reason }}</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Gráfico -->
+      <section class="chart-section">
+        <div class="chart-header">
+          <h2>Tendencia USD/COP</h2>
+          <div class="chart-tabs">
+            <button [class.active]="chartPeriod === 7" (click)="loadData(7)">7D</button>
+            <button [class.active]="chartPeriod === 30" (click)="loadData(30)">30D</button>
+            <button [class.active]="chartPeriod === 90" (click)="loadData(90)">90D</button>
+          </div>
+        </div>
+        <div class="chart-container">
+          <svg class="chart" viewBox="0 0 800 200" preserveAspectRatio="none">
+            <line x1="0" y1="50" x2="800" y2="50" class="grid-line"/>
+            <line x1="0" y1="100" x2="800" y2="100" class="grid-line"/>
+            <line x1="0" y1="150" x2="800" y2="150" class="grid-line"/>
+            <path [attr.d]="predictionAreaPath" class="prediction-area"/>
+            <polyline [attr.points]="historyLinePath" class="history-line"/>
+            <polyline [attr.points]="predictionLinePath" class="prediction-line"/>
+            <circle [attr.cx]="currentPointX" [attr.cy]="currentPointY" r="6" class="current-point"/>
+          </svg>
+          <div class="y-axis">
+            <span>{{ maxValue | number:'1.0-0' }}</span>
+            <span>{{ midValue | number:'1.0-0' }}</span>
+            <span>{{ minValue | number:'1.0-0' }}</span>
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span><i class="dot history"></i> Histórico</span>
+          <span><i class="dot prediction"></i> Predicción</span>
+          <span><i class="dot current"></i> Hoy</span>
+        </div>
+      </section>
+
+      <!-- Indicadores -->
+      <section class="indicators">
+        <div class="indicator"><span class="ind-label">Petróleo WTI</span><span class="ind-value">{{ oilWTI | number:'1.2-2' }} USD</span></div>
+        <div class="indicator"><span class="ind-label">Tasa Fed</span><span class="ind-value">{{ fedRate | number:'1.2-2' }}%</span></div>
+        <div class="indicator"><span class="ind-label">Tasa BanRep</span><span class="ind-value">{{ banrepRate | number:'1.2-2' }}%</span></div>
+        <div class="indicator"><span class="ind-label">Inflación COL</span><span class="ind-value">{{ inflationCol | number:'1.1-1' }}%</span></div>
+      </section>
+
+      <!-- Acciones -->
+      <section class="actions">
+        <button class="btn-action evaluate" (click)="evaluateMarket()" [disabled]="loading">
+          {{ loading ? 'Analizando...' : 'Evaluar Mercado' }}
+        </button>
+        <button class="btn-action buy" (click)="executeTrade('buy')" [disabled]="!canBuy">Comprar USD</button>
+        <button class="btn-action sell" (click)="executeTrade('sell')" [disabled]="!canSell">Vender USD</button>
+      </section>
+
+      <!-- Portfolio -->
+      <section class="portfolio-mini">
+        <div class="portfolio-item"><span>USD</span><strong>{{ portfolioUSD | number:'1.2-2' }}</strong></div>
+        <div class="portfolio-item"><span>COP</span><strong>{{ portfolioCOP | number:'1.0-0' }}</strong></div>
+        <div class="portfolio-item pnl" [class.positive]="portfolioPnL > 0" [class.negative]="portfolioPnL < 0">
+          <span>P&L</span><strong>{{ portfolioPnL > 0 ? '+' : '' }}{{ portfolioPnL | number:'1.0-0' }}</strong>
+        </div>
+      </section>
+
+      <!-- Panel de Análisis (aparece al evaluar) -->
+      <section class="analysis-panel" *ngIf="showAnalysis" (click)="showAnalysis = false">
+        <div class="analysis-content" (click)="$event.stopPropagation()">
+          <button class="close-btn" (click)="showAnalysis = false">✕</button>
+          <h2>Análisis del Mercado</h2>
+
+          <!-- Resultado -->
+          <div class="result-box" [class]="signalClass">
+            <span class="result-icon">{{ signalIcon }}</span>
+            <div>
+              <strong>{{ signalText }}</strong>
+              <p>{{ signalReason }}</p>
+            </div>
+          </div>
+
+          <!-- Modelos -->
+          <div class="section">
+            <h3>Modelos de Predicción</h3>
+            <p class="section-intro">Usamos 3 modelos de Machine Learning. Cada uno aporta un porcentaje al resultado final (el "peso").</p>
+            <div class="models-grid">
+              <div class="model-card" *ngFor="let m of models">
+                <div class="model-header">
+                  <span class="model-name">{{ m.name }}</span>
+                </div>
+                <p class="model-desc">{{ m.description }}</p>
+                <div class="model-weight-bar">
+                  <div class="weight-label">Peso en decisión final:</div>
+                  <div class="weight-bar-bg">
+                    <div class="weight-bar-fill" [style.width.%]="m.weight"></div>
+                  </div>
+                  <span class="weight-value">{{ m.weight }}%</span>
+                </div>
+                <div class="model-prediction">
+                  Predice TRM a 30 días: <strong>$ {{ m.prediction | number:'1.2-2' }}</strong>
+                </div>
+              </div>
+            </div>
+            <div class="ensemble-box">
+              <div class="ensemble-header">
+                <span class="ensemble-icon">🧮</span>
+                <strong>Predicción Final (Ensemble)</strong>
+              </div>
+              <p>El sistema combina las 3 predicciones usando los pesos anteriores:</p>
+              <div class="ensemble-formula">
+                (Prophet × 40%) + (LSTM × 35%) + (ARIMA × 25%) = <strong>$ {{ predictedTRM | number:'1.2-2' }}</strong>
+              </div>
+              <p class="ensemble-requirement">Solo se genera señal de compra/venta si la confianza supera el <strong>90%</strong></p>
+            </div>
+          </div>
+
+          <!-- Fuentes de Datos -->
+          <div class="section">
+            <h3>Fuentes de Datos</h3>
+            <div class="sources-list">
+              <div class="source-item" *ngFor="let s of dataSources">
+                <span class="source-icon">{{ s.icon }}</span>
+                <div>
+                  <strong>{{ s.name }}</strong>
+                  <p>{{ s.description }}</p>
+                  <span class="source-url">{{ s.url }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Análisis de Tendencia -->
+          <div class="section">
+            <h3>Análisis de Tendencia</h3>
+
+            <!-- Resumen visual -->
+            <div class="trend-summary" [class]="trendSummary.direction">
+              <div class="trend-gauge">
+                <div class="gauge-labels">
+                  <span>COP Fuerte</span>
+                  <span>Neutral</span>
+                  <span>USD Fuerte</span>
+                </div>
+                <div class="gauge-bar">
+                  <div class="gauge-fill" [style.left.%]="50 - trendSummary.strength/2" [style.width.%]="trendSummary.strength" [class]="trendSummary.direction"></div>
+                  <div class="gauge-marker" [style.left.%]="trendSummary.direction === 'bullish' ? 50 - trendSummary.strength/2 : trendSummary.direction === 'bearish' ? 50 + trendSummary.strength/2 : 50"></div>
+                </div>
+              </div>
+              <div class="trend-verdict">
+                <span class="verdict-icon">{{ trendSummary.direction === 'bullish' ? '💪' : trendSummary.direction === 'bearish' ? '⚠️' : '⚖️' }}</span>
+                <div>
+                  <strong>{{ trendSummary.direction === 'bullish' ? 'Peso Favorable' : trendSummary.direction === 'bearish' ? 'Dólar Favorable' : 'Sin Tendencia Clara' }}</strong>
+                  <p>{{ trendSummary.bullishFactors }} factores alcistas vs {{ trendSummary.bearishFactors }} bajistas. Movimiento esperado: {{ trendSummary.expectedMove > 0 ? '+' : '' }}{{ trendSummary.expectedMove | number:'1.2-2' }}%</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Factores detallados -->
+            <div class="factors-detailed">
+              <div class="factor-card" *ngFor="let f of trendFactors" [class]="f.impact">
+                <div class="factor-header">
+                  <div class="factor-title">
+                    <span class="factor-icon">{{ f.impact === 'bullish' ? '📈' : f.impact === 'bearish' ? '📉' : '➡️' }}</span>
+                    <div>
+                      <strong>{{ f.name }}</strong>
+                      <span class="factor-category">{{ f.category }}</span>
+                    </div>
+                  </div>
+                  <div class="factor-weight">
+                    <span class="weight-pct">{{ f.weight }}%</span>
+                    <span class="weight-label">peso</span>
+                  </div>
+                </div>
+                <div class="factor-values">
+                  <div class="value-current">
+                    <span class="val-label">Actual</span>
+                    <span class="val-data">{{ f.currentValue }}</span>
+                  </div>
+                  <div class="value-ref">
+                    <span class="val-label">Referencia</span>
+                    <span class="val-data">{{ f.referenceValue }}</span>
+                  </div>
+                </div>
+                <p class="factor-explanation">{{ f.explanation }}</p>
+                <div class="factor-correlation">
+                  <span>Correlación histórica con TRM:</span>
+                  <div class="corr-bar">
+                    <div class="corr-fill" [style.width.%]="Math.abs(f.correlation) * 100" [class.negative]="f.correlation < 0"></div>
+                  </div>
+                  <span class="corr-value">{{ f.correlation > 0 ? '+' : '' }}{{ f.correlation | number:'1.2-2' }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Métricas -->
+          <div class="section">
+            <h3>Rendimiento del Sistema</h3>
+            <p class="section-intro">Resultados del backtest con {{ modelMetrics.totalTrades }} operaciones simuladas en los últimos 2 años.</p>
+
+            <!-- Métricas principales en grid -->
+            <div class="metrics-summary">
+              <div class="metric-card highlight">
+                <span class="metric-big">{{ modelMetrics.winRate }}%</span>
+                <span class="metric-title">Win Rate</span>
+                <span class="metric-sub">Operaciones ganadoras</span>
+              </div>
+              <div class="metric-card highlight">
+                <span class="metric-big">{{ modelMetrics.profitFactor }}x</span>
+                <span class="metric-title">Profit Factor</span>
+                <span class="metric-sub">Ganancias vs Pérdidas</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-big">{{ modelMetrics.sharpeRatio }}</span>
+                <span class="metric-title">Sharpe Ratio</span>
+                <span class="metric-sub">Retorno/Riesgo</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-big">{{ modelMetrics.maxDrawdown }}%</span>
+                <span class="metric-title">Max Drawdown</span>
+                <span class="metric-sub">Pérdida máxima</span>
+              </div>
+            </div>
+
+            <!-- Detalles expandidos -->
+            <div class="metrics-details">
+              <div class="detail-row">
+                <div class="detail-item">
+                  <span class="detail-label">Precisión Direccional</span>
+                  <div class="detail-bar">
+                    <div class="detail-fill" [style.width.%]="modelMetrics.directionalAccuracy"></div>
+                  </div>
+                  <span class="detail-value">{{ modelMetrics.directionalAccuracy }}%</span>
+                </div>
+                <p class="detail-explain">Acierta la dirección (sube/baja) {{ modelMetrics.directionalAccuracy }} de cada 100 veces</p>
+              </div>
+              <div class="detail-row">
+                <div class="detail-item">
+                  <span class="detail-label">Error de Predicción (MAPE)</span>
+                  <div class="detail-bar inverted">
+                    <div class="detail-fill" [style.width.%]="modelMetrics.mape * 10"></div>
+                  </div>
+                  <span class="detail-value">{{ modelMetrics.mape }}%</span>
+                </div>
+                <p class="detail-explain">Las predicciones se desvían en promedio solo {{ (currentTRM * modelMetrics.mape / 100) | number:'1.0-0' }} COP del valor real</p>
+              </div>
+              <div class="detail-row">
+                <div class="detail-item">
+                  <span class="detail-label">Retorno Promedio por Operación</span>
+                  <span class="detail-value positive">+{{ modelMetrics.avgTradeReturn }}%</span>
+                </div>
+                <p class="detail-explain">Cada operación ejecutada genera en promedio {{ modelMetrics.avgTradeReturn }}% de ganancia</p>
+              </div>
+            </div>
+
+            <!-- Interpretación -->
+            <div class="metrics-interpretation">
+              <div class="interp-icon">💡</div>
+              <div class="interp-text">
+                <strong>¿Qué significa esto?</strong>
+                <p>Con un Win Rate del {{ modelMetrics.winRate }}% y Profit Factor de {{ modelMetrics.profitFactor }}x, el sistema genera <strong>$2.40 por cada $1 que pierde</strong>. El Sharpe Ratio de {{ modelMetrics.sharpeRatio }} indica un rendimiento ajustado al riesgo superior al mercado.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Toast -->
+      <div class="toast" *ngIf="toastMessage" [class]="toastType">{{ toastMessage }}</div>
+    </div>
+  

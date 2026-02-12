@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.models.database_models import Order, OrderStatus, TradingSignal
 from app.services.decision_engine import TradingDecision
 from app.models.database_models import SignalAction
+from app.services.paper_trading_reporting import build_portfolio_summary, list_trade_history
 
 logger = logging.getLogger(__name__)
 
@@ -249,47 +250,8 @@ class PaperTradingService:
         company_id: Optional[UUID] = None,
         current_trm: Optional[Decimal] = None
     ) -> dict:
-        """
-        Obtener resumen del portafolio de paper trading
-
-        Args:
-            company_id: ID de la empresa
-            current_trm: TRM actual para calcular valor
-
-        Returns:
-            Resumen del portafolio
-        """
         portfolio = self.get_or_create_portfolio(company_id)
-
-        # Si no se provee TRM, usar 4200 como default
-        trm = current_trm or Decimal("4200")
-
-        # Calcular valor total en COP
-        usd_value_cop = portfolio.usd_balance * trm
-        total_value_cop = portfolio.cop_balance + usd_value_cop
-
-        # Calcular PnL (asumiendo capital inicial de 100M COP)
-        initial_capital = Decimal("100000000")
-        total_pnl = total_value_cop - initial_capital
-        pnl_pct = (total_pnl / initial_capital) * 100
-
-        return {
-            "company_id": str(portfolio.company_id) if portfolio.company_id else None,
-            "usd_balance": float(portfolio.usd_balance),
-            "cop_balance": float(portfolio.cop_balance),
-            "usd_value_cop": float(usd_value_cop),
-            "total_value_cop": float(total_value_cop),
-            "total_pnl": float(total_pnl),
-            "pnl_pct": float(pnl_pct),
-            "total_trades": portfolio.total_trades,
-            "profitable_trades": portfolio.profitable_trades,
-            "win_rate": (
-                portfolio.profitable_trades / portfolio.total_trades * 100
-                if portfolio.total_trades > 0 else 0
-            ),
-            "current_trm": float(trm),
-            "created_at": portfolio.created_at.isoformat()
-        }
+        return build_portfolio_summary(portfolio, current_trm)
 
     def reset_portfolio(self, company_id: Optional[UUID] = None) -> bool:
         """Resetear portafolio de paper trading"""
@@ -308,30 +270,7 @@ class PaperTradingService:
         limit: int = 50
     ) -> List[dict]:
         """Obtener historial de trades de paper trading"""
-        db = SessionLocal()
-        try:
-            query = db.query(Order).filter(Order.is_paper_trade == True)
-
-            if company_id:
-                query = query.filter(Order.company_id == company_id)
-
-            orders = query.order_by(Order.created_at.desc()).limit(limit).all()
-
-            return [
-                {
-                    "id": str(o.id),
-                    "side": o.side,
-                    "amount": float(o.amount),
-                    "rate": float(o.executed_rate) if o.executed_rate else None,
-                    "status": o.status.value,
-                    "created_at": o.created_at.isoformat(),
-                    "executed_at": o.executed_at.isoformat() if o.executed_at else None
-                }
-                for o in orders
-            ]
-
-        finally:
-            db.close()
+        return list_trade_history(company_id=company_id, limit=limit)
 
 
 # Instancia singleton

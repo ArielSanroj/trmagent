@@ -2,16 +2,14 @@
 ATLAS - Exposure Service
 Manejo de exposiciones cambiarias: CRUD, carga CSV, agregaciones
 """
-import csv
-import io
 from datetime import date, datetime
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import List, Optional, Dict, Any, BinaryIO
 from uuid import UUID
 import logging
 
 from sqlalchemy.orm import Session
-from sqlalchemy import func, and_, or_
+from sqlalchemy import and_, or_
 
 from app.atlas.models.atlas_models import (
     Exposure,
@@ -25,6 +23,8 @@ from app.atlas.models.schemas import (
     ExposureSummary,
     ExposureUploadResult,
 )
+from app.atlas.services.exposure_csv import upload_csv_exposures
+from app.atlas.services.exposure_aggregations import build_summary, list_by_horizon
 
 logger = logging.getLogger(__name__)
 
@@ -154,113 +154,7 @@ class ExposureService:
         currency: str = "USD"
     ) -> ExposureSummary:
         """Obtener resumen agregado de exposiciones"""
-        today = date.today()
-
-        # Query base para exposiciones abiertas
-        base_query = self.db.query(Exposure).filter(
-            Exposure.company_id == company_id,
-            Exposure.currency == currency,
-            Exposure.status.in_([
-                ExposureStatus.OPEN,
-                ExposureStatus.PARTIALLY_HEDGED
-            ])
-        )
-
-        # Totales por tipo
-        payables = base_query.filter(
-            Exposure.exposure_type == ExposureType.PAYABLE
-        ).with_entities(
-            func.coalesce(func.sum(Exposure.amount), 0).label('total'),
-            func.coalesce(func.sum(Exposure.amount_hedged), 0).label('hedged'),
-            func.count(Exposure.id).label('count')
-        ).first()
-
-        receivables = base_query.filter(
-            Exposure.exposure_type == ExposureType.RECEIVABLE
-        ).with_entities(
-            func.coalesce(func.sum(Exposure.amount), 0).label('total'),
-            func.coalesce(func.sum(Exposure.amount_hedged), 0).label('hedged'),
-            func.count(Exposure.id).label('count')
-        ).first()
-
-        total_payables = Decimal(str(payables.total)) if payables.total else Decimal("0")
-        total_receivables = Decimal(str(receivables.total)) if receivables.total else Decimal("0")
-        hedged_payables = Decimal(str(payables.hedged)) if payables.hedged else Decimal("0")
-        hedged_receivables = Decimal(str(receivables.hedged)) if receivables.hedged else Decimal("0")
-
-        # Exposicion neta
-        net_exposure = total_payables - total_receivables
-
-        # Cobertura total
-        total_exposure = total_payables + total_receivables
-        total_hedged = hedged_payables + hedged_receivables
-        coverage_pct = (
-            (total_hedged / total_exposure * 100) if total_exposure > 0 else Decimal("0")
-        )
-
-        # Por horizonte
-        by_horizon = self._get_by_horizon(company_id, currency)
-
-        return ExposureSummary(
-            total_payables=total_payables,
-            total_receivables=total_receivables,
-            total_hedged_payables=hedged_payables,
-            total_hedged_receivables=hedged_receivables,
-            net_exposure=net_exposure,
-            coverage_percentage=coverage_pct.quantize(Decimal("0.01")),
-            exposures_count=int(payables.count or 0) + int(receivables.count or 0),
-            by_horizon=by_horizon,
-        )
-
-    def _get_by_horizon(
-        self,
-        company_id: UUID,
-        currency: str = "USD"
-    ) -> Dict[str, Dict[str, Any]]:
-        """Agrupar exposiciones por horizonte temporal"""
-        today = date.today()
-        horizons = {
-            "0-30": {"min": 0, "max": 30},
-            "31-60": {"min": 31, "max": 60},
-            "61-90": {"min": 61, "max": 90},
-            "91+": {"min": 91, "max": 9999},
-        }
-
-        result = {}
-        for horizon_name, bounds in horizons.items():
-            # Calcular fechas
-            from datetime import timedelta
-            min_date = today + timedelta(days=bounds["min"])
-            max_date = today + timedelta(days=bounds["max"])
-
-            # Query
-            query = self.db.query(Exposure).filter(
-                Exposure.company_id == company_id,
-                Exposure.currency == currency,
-                Exposure.status.in_([ExposureStatus.OPEN, ExposureStatus.PARTIALLY_HEDGED]),
-                Exposure.due_date >= min_date,
-                Exposure.due_date <= max_date,
-            )
-
-            agg = query.with_entities(
-                func.coalesce(func.sum(Exposure.amount), 0).label('total'),
-                func.coalesce(func.sum(Exposure.amount_hedged), 0).label('hedged'),
-                func.count(Exposure.id).label('count')
-            ).first()
-
-            total = Decimal(str(agg.total)) if agg.total else Decimal("0")
-            hedged = Decimal(str(agg.hedged)) if agg.hedged else Decimal("0")
-            coverage = (hedged / total * 100) if total > 0 else Decimal("0")
-
-            result[horizon_name] = {
-                "total": float(total),
-                "hedged": float(hedged),
-                "open": float(total - hedged),
-                "count": int(agg.count or 0),
-                "coverage_pct": float(coverage.quantize(Decimal("0.01"))),
-            }
-
-        return result
+        return build_summary(self.db, company_id, currency)
 
     def get_by_horizon(
         self,
@@ -269,30 +163,7 @@ class ExposureService:
         currency: str = "USD"
     ) -> List[Exposure]:
         """Obtener exposiciones de un horizonte especifico"""
-        today = date.today()
-        from datetime import timedelta
-
-        horizons = {
-            "0-30": (0, 30),
-            "31-60": (31, 60),
-            "61-90": (61, 90),
-            "91+": (91, 9999),
-        }
-
-        if horizon not in horizons:
-            return []
-
-        min_days, max_days = horizons[horizon]
-        min_date = today + timedelta(days=min_days)
-        max_date = today + timedelta(days=max_days)
-
-        return self.db.query(Exposure).filter(
-            Exposure.company_id == company_id,
-            Exposure.currency == currency,
-            Exposure.status.in_([ExposureStatus.OPEN, ExposureStatus.PARTIALLY_HEDGED]),
-            Exposure.due_date >= min_date,
-            Exposure.due_date <= max_date,
-        ).order_by(Exposure.due_date).all()
+        return list_by_horizon(self.db, company_id, horizon, currency)
 
     # =========================================================================
     # CSV Upload
@@ -304,217 +175,13 @@ class ExposureService:
         file_content: BinaryIO,
         created_by: Optional[UUID] = None
     ) -> ExposureUploadResult:
-        """
-        Cargar exposiciones desde archivo CSV.
-
-        Formato esperado:
-        reference,type,amount,currency,due_date,counterparty,description,invoice_date
-
-        type: payable o receivable
-        """
-        result = ExposureUploadResult(
-            total_rows=0,
-            created=0,
-            updated=0,
-            errors=0,
-            error_details=[]
-        )
-
-        try:
-            # Decodificar contenido
-            content = file_content.read()
-            if isinstance(content, bytes):
-                content = content.decode('utf-8-sig')  # Handle BOM
-
-            reader = csv.DictReader(io.StringIO(content))
-
-            for row_num, row in enumerate(reader, start=2):  # Start at 2 (header is row 1)
-                result.total_rows += 1
-
-                try:
-                    exposure = self._parse_csv_row(
-                        company_id=company_id,
-                        row=row,
-                        row_num=row_num,
-                        created_by=created_by
-                    )
-
-                    if exposure:
-                        # Check if exists by external_id or reference
-                        existing = self._find_existing(
-                            company_id,
-                            row.get('reference', '').strip(),
-                            row.get('external_id', '').strip() if row.get('external_id') else None
-                        )
-
-                        if existing:
-                            # Update existing
-                            self._update_from_row(existing, row)
-                            result.updated += 1
-                        else:
-                            # Create new
-                            self.db.add(exposure)
-                            result.created += 1
-
-                except Exception as e:
-                    result.errors += 1
-                    result.error_details.append({
-                        "row": row_num,
-                        "error": str(e),
-                        "data": dict(row) if row else None
-                    })
-                    logger.warning(f"Error parsing row {row_num}: {e}")
-
-            self.db.commit()
-            logger.info(
-                f"CSV upload completed for company {company_id}: "
-                f"{result.created} created, {result.updated} updated, {result.errors} errors"
-            )
-
-        except Exception as e:
-            self.db.rollback()
-            logger.error(f"CSV upload failed: {e}")
-            result.errors = result.total_rows
-            result.error_details.append({
-                "row": 0,
-                "error": f"Failed to process file: {str(e)}",
-                "data": None
-            })
-
-        return result
-
-    def _parse_csv_row(
-        self,
-        company_id: UUID,
-        row: Dict[str, str],
-        row_num: int,
-        created_by: Optional[UUID] = None
-    ) -> Optional[Exposure]:
-        """Parsear una fila del CSV"""
-        # Campos requeridos
-        reference = row.get('reference', '').strip()
-        if not reference:
-            raise ValueError("reference is required")
-
-        exposure_type_str = row.get('type', '').strip().lower()
-        if exposure_type_str not in ['payable', 'receivable']:
-            raise ValueError(f"type must be 'payable' or 'receivable', got '{exposure_type_str}'")
-
-        amount_str = row.get('amount', '').strip().replace(',', '')
-        try:
-            amount = Decimal(amount_str)
-            if amount <= 0:
-                raise ValueError("amount must be positive")
-        except InvalidOperation:
-            raise ValueError(f"Invalid amount: {amount_str}")
-
-        due_date_str = row.get('due_date', '').strip()
-        try:
-            # Try multiple date formats
-            due_date = self._parse_date(due_date_str)
-        except:
-            raise ValueError(f"Invalid due_date: {due_date_str}")
-
-        # Campos opcionales
-        currency = row.get('currency', 'USD').strip().upper() or 'USD'
-        description = row.get('description', '').strip() or None
-
-        invoice_date = None
-        if row.get('invoice_date'):
-            try:
-                invoice_date = self._parse_date(row.get('invoice_date', '').strip())
-            except:
-                pass
-
-        # Buscar contraparte
-        counterparty_id = None
-        counterparty_name = row.get('counterparty', '').strip()
-        if counterparty_name:
-            counterparty = self.db.query(Counterparty).filter(
-                Counterparty.company_id == company_id,
-                Counterparty.name.ilike(counterparty_name)
-            ).first()
-            if counterparty:
-                counterparty_id = counterparty.id
-
-        # Tasas opcionales
-        original_rate = self._parse_decimal(row.get('original_rate', ''))
-        budget_rate = self._parse_decimal(row.get('budget_rate', ''))
-        target_rate = self._parse_decimal(row.get('target_rate', ''))
-
-        return Exposure(
+        return upload_csv_exposures(
+            db=self.db,
             company_id=company_id,
-            counterparty_id=counterparty_id,
-            exposure_type=ExposureType(exposure_type_str),
-            reference=reference,
-            description=description,
-            currency=currency,
-            amount=amount,
-            original_rate=original_rate,
-            budget_rate=budget_rate,
-            target_rate=target_rate,
-            invoice_date=invoice_date,
-            due_date=due_date,
-            external_id=row.get('external_id', '').strip() or None,
-            source="csv_upload",
+            file_content=file_content,
             created_by=created_by,
+            logger=logger
         )
-
-    def _parse_date(self, date_str: str) -> date:
-        """Parsear fecha en varios formatos"""
-        formats = ['%Y-%m-%d', '%d/%m/%Y', '%m/%d/%Y', '%Y/%m/%d']
-        for fmt in formats:
-            try:
-                return datetime.strptime(date_str, fmt).date()
-            except ValueError:
-                continue
-        raise ValueError(f"Cannot parse date: {date_str}")
-
-    def _parse_decimal(self, value_str: str) -> Optional[Decimal]:
-        """Parsear decimal opcional"""
-        if not value_str:
-            return None
-        try:
-            return Decimal(value_str.strip().replace(',', ''))
-        except:
-            return None
-
-    def _find_existing(
-        self,
-        company_id: UUID,
-        reference: str,
-        external_id: Optional[str]
-    ) -> Optional[Exposure]:
-        """Buscar exposicion existente"""
-        query = self.db.query(Exposure).filter(
-            Exposure.company_id == company_id
-        )
-
-        if external_id:
-            existing = query.filter(Exposure.external_id == external_id).first()
-            if existing:
-                return existing
-
-        return query.filter(Exposure.reference == reference).first()
-
-    def _update_from_row(self, exposure: Exposure, row: Dict[str, str]) -> None:
-        """Actualizar exposicion existente desde fila CSV"""
-        if row.get('amount'):
-            try:
-                exposure.amount = Decimal(row['amount'].strip().replace(',', ''))
-            except:
-                pass
-
-        if row.get('due_date'):
-            try:
-                exposure.due_date = self._parse_date(row['due_date'].strip())
-            except:
-                pass
-
-        if row.get('description'):
-            exposure.description = row['description'].strip()
-
-        exposure.updated_at = datetime.utcnow()
 
     # =========================================================================
     # Hedge Management
