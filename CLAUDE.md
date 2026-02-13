@@ -234,5 +234,12 @@ uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
 
 ---
 
+## Machine Learning y Notas de Referencia
+
+- **[MachineLearning.MD](MachineLearning.MD)** — Modelos, métricas, validación y checklists de ML del proyecto
+- **[docs/ml-notes/](docs/ml-notes/)** — Notas de referencia de ciencia de datos (cheatsheets, resúmenes, cursos, implementaciones, producción)
+
+---
+
 **Version**: 1.0.0 - TRM Agent
-**Ultima actualizacion**: 2026-02-12
+**Ultima actualizacion**: 2026-02-13
